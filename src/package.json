@@ -1,0 +1,35 @@
+{
+  "name": "@glimmer/syntax",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.js",
+      "default": "./src/index.ts"
+    }
+  },
+  "imports": {
+    "#package": {
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@handlebars/parser": "~2.0.0",
+    "simple-html-tokenizer": "^0.5.11"
+  },
+  "devDependencies": {
+    "@glimmer/interfaces": "0.84.2",
+    "@types/chai-subset": "^1.3.3",
+    "@types/qunit": "^2.9.0",
+    "qunit": "^2.9.3",
+    "typescript": "^4.6.4",
+    "vite": "^2.9.9",
+    "vitest": "^0.12.6"
+  }
+}

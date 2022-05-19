@@ -1,5 +1,4 @@
 import { type ParserNodeBuilder, type Tag, Parser } from '../parser';
-import { ABSENT_LOCATION } from '../source/location';
 import { generateSyntaxError, GlimmerSyntaxError } from '../syntax-error';
 import { appendChild, isHBSLiteral, printLiteral } from '../utils';
 import type { Optional } from '../utils/exists.js';
@@ -90,11 +89,11 @@ export abstract class HandlebarsNodeVisitors extends Parser {
 
     // These are bugs in Handlebars upstream
     if (!block.program.loc) {
-      block.program.loc = ABSENT_LOCATION;
+      block.program.loc = this.builder.span('missing');
     }
 
     if (block.inverse && !block.inverse.loc) {
-      block.inverse.loc = ABSENT_LOCATION;
+      block.inverse.loc = this.builder.span('missing');
     }
 
     let program = this.Program(block.program);

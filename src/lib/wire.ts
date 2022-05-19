@@ -1,0 +1,17 @@
+// FIXME: Avoid needing the precise wire format numbers here.
+export const GET_FREE_AS_COMPONENT_HEAD = 39;
+export const GET_FREE_AS_COMPONENT_OR_HELPER_HEAD_OR_THIS_FALLBACK = 34;
+export const GET_FREE_AS_COMPONENT_OR_HELPER_HEAD = 35;
+export const GET_FREE_AS_MODIFIER_HEAD = 38;
+export const GET_FREE_AS_HELPER_HEAD = 37;
+export const GET_FREE_AS_HELPER_HEAD_OR_THIS_FALLBACK = 36;
+export const GET_STRICT_FREE = 31;
+
+export type GetContextualFreeOp =
+  | typeof GET_FREE_AS_COMPONENT_HEAD
+  | typeof GET_FREE_AS_COMPONENT_OR_HELPER_HEAD_OR_THIS_FALLBACK
+  | typeof GET_FREE_AS_COMPONENT_OR_HELPER_HEAD
+  | typeof GET_FREE_AS_MODIFIER_HEAD
+  | typeof GET_FREE_AS_HELPER_HEAD
+  | typeof GET_FREE_AS_HELPER_HEAD_OR_THIS_FALLBACK
+  | typeof GET_STRICT_FREE;
