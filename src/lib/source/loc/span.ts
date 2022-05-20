@@ -3,16 +3,26 @@ import { DEBUG } from '@glimmer/env';
 import { LOCAL_DEBUG } from '@glimmer/local-debug-flags';
 
 import type { SymbolicSyntaxError } from '../../syntax-error';
-import { exhaustive } from '../../utils/assert.js';
-import type { SourceLocation, SourcePosition } from '../../v1/handlebars-ast';
-import { SpecialSourceLocation } from '../location';
+import type { PresentArray } from '../../utils/array';
+import { assert, assertTypes, exhaustive } from '../../utils/assert.js';
+import {
+  type MutableSourceLocation,
+  type SourcePosition,
+  SourceLocation,
+} from '../../v1/handlebars-ast';
+import { UNKNOWN_POSITION } from '../index';
+import { type SpecialPurpose, SpecialSourceLocation } from '../location';
 import { SourceSlice } from '../slice';
 import type { SourceTemplate } from '../source';
 import { format, FormatSpan } from './format';
-import { IsAbsent, OffsetKind } from './kind.js';
-import { type MatchFn, match, MatchAny } from './match';
-import type { SourceOffset } from './offset';
-import { type AnyPosition, AbsentPosition, BROKEN, CharPosition, HbsPosition } from './offset';
+import { OffsetKind } from './kind.js';
+import {
+  type BrokenPosition,
+  type MissingPosition,
+  type SourceOffset0,
+  SyntheticPosition,
+} from './offset';
+import { type AnyPosition, BROKEN, CharPosition, OffsetPosition } from './offset';
 
 /**
  * All spans have these details in common.
@@ -24,6 +34,8 @@ interface SpanData {
    * Convert this span into a string. If the span is broken, return `''`.
    */
   asString(): string;
+
+  flat(): PresentArray<FlatSpan>;
 
   /**
    * The original `Source` containing this span. It may be a `Source.nonexistent()`.
@@ -48,9 +60,19 @@ interface SpanData {
   getEnd(): AnyPosition;
 
   /**
-   * Compute the `SourceLocation` for this span, returned as an instance of `HbsSpan`.
+   * - "concrete" means that the span represents a concrete area of the source
+   *   code and is not broken
+   * - "synthetic" means that the span represents text that is not part of the
+   *   source code and was added by the parser
+   * - "broken" means that the span represents a source location from the parser
+   *   that is malformed or does not correspond to a part of the source code
    */
-  toHbsSpan(): HbsSpan | null;
+  classify(): 'concrete' | 'synthetic' | 'broken';
+
+  /**
+   * Compute the `SourceLocation` for this span.
+   */
+  toAST(): SourceLocation;
 
   /**
    * For compatibility, whenever the `start` or `end` of a {@see SourceOffset} changes, spans are
@@ -60,10 +82,10 @@ interface SpanData {
   locDidUpdate(changes: { start?: SourcePosition; end?: SourcePosition }): void;
 
   /**
-   * Serialize into a {@see SerializedSourceSpan}, which is compact and designed for readability in
-   * context like AST Explorer. If you need a {@see SourceLocation}, use {@see toJSON}.
+   * Serialize into a {@link SerializedSourceSpan}, which is compact and designed for readability in
+   * context like AST Explorer. If you need a {@link SourceLocation}, use {@link toJSON}.
    */
-  serialize(): SerializedSourceSpan;
+  serialize(): SerializedSourceSpan[];
 }
 
 /**
@@ -102,21 +124,10 @@ interface SpanData {
  */
 export class SourceSpan implements SourceLocation {
   /**
-   * See {@link OffsetKind.EmptySource}
-   */
-  static emptySource(template: SourceTemplate): SourceSpan {
-    return new InvisibleSpan(
-      OffsetKind.EmptySource,
-      SpecialSourceLocation('absent', template),
-      template
-    ).wrap();
-  }
-
-  /**
    * See {@link OffsetKind.BrokenLocation}
    */
   static brokenLoc(template: SourceTemplate, loc: SourceLocation): SourceSpan {
-    return new InvisibleSpan(
+    return new HbsSpan(
       OffsetKind.BrokenLocation,
       SpecialSourceLocation('broken', loc),
       template
@@ -124,7 +135,7 @@ export class SourceSpan implements SourceLocation {
   }
 
   static missingLoc(template: SourceTemplate): SourceSpan {
-    return new InvisibleSpan(
+    return new SyntheticSpan(
       OffsetKind.MissingLocation,
       SpecialSourceLocation('missing', template),
       template
@@ -132,7 +143,7 @@ export class SourceSpan implements SourceLocation {
   }
 
   static synthetic(template: SourceTemplate, chars: string): SourceSpan {
-    return new InvisibleSpan(
+    return new SyntheticSpan(
       OffsetKind.SyntheticSource,
       SpecialSourceLocation('internal-synthetic', template),
       template,
@@ -152,7 +163,7 @@ export class SourceSpan implements SourceLocation {
         return SourceSpan.forCharPositions(template, serialized[0], serialized[1]);
       }
     } else if (serialized === OffsetKind.EmptySource) {
-      return SourceSpan.emptySource(template);
+      return SourceSpan.collapsed(template);
     } else if (serialized === OffsetKind.BrokenLocation) {
       return SourceSpan.brokenLoc(template, BROKEN_LOCATION);
     }
@@ -161,8 +172,8 @@ export class SourceSpan implements SourceLocation {
   }
 
   static forHbsLoc(source: SourceTemplate, loc: SourceLocation): SourceSpan {
-    let start = new HbsPosition(source, loc.start);
-    let end = new HbsPosition(source, loc.end);
+    let start = new OffsetPosition(source, loc.start);
+    let end = new OffsetPosition(source, loc.end);
     return new HbsSpan(source, { start, end }, loc).wrap();
   }
 
@@ -175,16 +186,20 @@ export class SourceSpan implements SourceLocation {
 
   readonly isInvisible: boolean;
 
-  constructor(private data: SpanData & AnySpan) {
+  constructor(readonly data: SpanData & AnySpan) {
     this.isInvisible =
       data.kind !== OffsetKind.CharPosition && data.kind !== OffsetKind.HbsPosition;
   }
 
-  getStart(): SourceOffset {
+  join(other: SourceSpan): SourceSpan {
+    return new SourceSpan(MultiSpan.join(this.getTemplate(), this.data, other.data));
+  }
+
+  getStart(): SourceOffset0 {
     return this.data.getStart().wrap();
   }
 
-  getEnd(): SourceOffset {
+  getEnd(): SourceOffset0 {
     return this.data.getEnd().wrap();
   }
 
@@ -193,8 +208,7 @@ export class SourceSpan implements SourceLocation {
   }
 
   get loc(): SourceLocation {
-    let span = this.data.toHbsSpan();
-    return span === null ? BROKEN_LOCATION : span.toHbsLoc();
+    return this.data.toAST();
   }
 
   get module(): string {
@@ -230,14 +244,14 @@ export class SourceSpan implements SourceLocation {
   /**
    * Create a new span with the current span's end and a new beginning.
    */
-  withStart(other: SourceOffset): SourceSpan {
+  withStart(other: SourceOffset0): SourceSpan {
     return span(other.data, this.data.getEnd());
   }
 
   /**
    * Create a new span with the current span's beginning and a new ending.
    */
-  withEnd(this: SourceSpan, other: SourceOffset): SourceSpan {
+  withEnd(this: SourceSpan, other: SourceOffset0): SourceSpan {
     return span(this.data.getStart(), other.data);
   }
 
@@ -378,17 +392,168 @@ export class SourceSpan implements SourceLocation {
   }
 }
 
-type AnySpan = HbsSpan | CharPositionSpan | InvisibleSpan;
+type ConcreteSpan = HbsSpan | CharPositionSpan;
+type FlatSpan = ConcreteSpan | SyntheticSpan;
+type AnySpan = FlatSpan | MultiSpan;
 
-class CharPositionSpan implements SpanData {
+export function isConcreteSpan(span: AnySpan): span is ConcreteSpan {
+  return span.kind === OffsetKind.CharPosition || span.kind === OffsetKind.HbsPosition;
+}
+
+class ConcreteSpan {
+  #start: ConcretePosition;
+  #end: ConcretePosition;
+
+  constructor(start: ConcretePosition, end: ConcretePosition) {
+    this.#start = start;
+    this.#end = end;
+  }
+}
+
+export class MultiSpan implements SpanData {
+  static join(template: SourceTemplate, left: AnySpan, right: AnySpan) {
+    return new MultiSpan(template, [...left.flat(), ...right.flat()]);
+  }
+
+  readonly kind = OffsetKind.Multi;
+
+  #template: SourceTemplate;
+  #spans: PresentArray<FlatSpan>;
+  #concrete: ConcreteSpan[];
+  #override: {
+    start: AnyPosition | null;
+    end: AnyPosition | null;
+  } = {
+    start: null,
+    end: null,
+  };
+
+  constructor(template: SourceTemplate, spans: PresentArray<FlatSpan>) {
+    this.#template = template;
+    this.#spans = spans;
+    this.#concrete = spans.filter(isConcreteSpan);
+  }
+
+  classify(): 'concrete' | 'synthetic' | 'broken' {
+    const first = this.#startPos();
+    const last = this.#endPos();
+
+    if (this.#concrete.length === 0) {
+      return 'synthetic';
+    }
+
+    if (first === null || last === null) {
+      return 'broken';
+    }
+
+    return 'concrete';
+  }
+
+  flat(): PresentArray<FlatSpan> {
+    return this.#spans;
+  }
+
+  #startPos(): AnyPosition | null {
+    if (this.#override.start) {
+      return this.#override.start;
+    }
+
+    if (this.#concrete.length === 0) {
+      return null;
+    } else {
+      return this.#concrete[0].getStart();
+    }
+  }
+
+  #endPos(): AnyPosition | null {
+    if (this.#override.end) {
+      return this.#override.end;
+    }
+
+    if (this.#concrete.length === 0) {
+      return null;
+    } else {
+      return this.#concrete[this.#concrete.length - 1].getEnd();
+    }
+  }
+
+  toAST(): SourceLocation {
+    if (this.#concrete.length === 0) {
+      return SpecialSourceLocation('internal-synthetic', this.#template);
+    }
+
+    const start = this.#startPos();
+    const end = this.#endPos();
+
+    if (start === null || end === null) {
+      return SpecialSourceLocation('broken', {
+        source: this.#template.module,
+        start: start?.toAST() ?? UNKNOWN_POSITION,
+        end: end?.toAST() ?? UNKNOWN_POSITION,
+      });
+    }
+
+    return SourceLocation(start.toAST(), end.toAST(), { source: this.#template.module });
+  }
+
+  asString(): string {
+    return this.#spans.map((span) => span.asString()).join('');
+  }
+
+  getTemplate(): SourceTemplate {
+    return this.#template;
+  }
+
+  getModule(): string {
+    return this.#template.module;
+  }
+
+  getStart(): AnyPosition {
+    return this.#spans[0].getStart();
+  }
+
+  getEnd(): AnyPosition {
+    return this.#spans[this.#spans.length - 1].getEnd();
+  }
+
+  locDidUpdate(changes: {
+    start?: SourcePosition | undefined;
+    end?: SourcePosition | undefined;
+  }): void {
+    if (changes.start) {
+      this.#override.start = new OffsetPosition(this.#template, changes.start);
+    }
+
+    if (changes.end) {
+      this.#override.end = new OffsetPosition(this.#template, changes.end);
+    }
+  }
+
+  serialize(): SerializedSourceSpan[] {
+    return this.#spans.flatMap((span) => span.serialize());
+  }
+}
+
+export class CharPositionSpan implements SpanData {
   readonly kind = OffsetKind.CharPosition;
 
-  _locPosSpan: HbsSpan | BROKEN | null = null;
+  #cache: HbsSpan | null = null;
 
   constructor(
     readonly source: SourceTemplate,
     readonly charPositions: { start: CharPosition; end: CharPosition }
   ) {}
+  classify(): 'concrete' | 'synthetic' | 'broken' {
+    return 'concrete';
+  }
+
+  flat(): PresentArray<FlatSpan> {
+    return [this];
+  }
+
+  toAST(): SourceLocation {
+    return this.toHbsSpan().toAST();
+  }
 
   wrap(): SourceSpan {
     return new SourceSpan(this);
@@ -423,36 +588,32 @@ class CharPositionSpan implements SpanData {
     }
   }
 
-  toHbsSpan(): HbsSpan | null {
-    let locPosSpan = this._locPosSpan;
+  toHbsSpan(): HbsSpan {
+    let cache = this.#cache;
 
-    if (locPosSpan === null) {
+    if (cache === null) {
       let start = this.charPositions.start.toHbsPos();
       let end = this.charPositions.end.toHbsPos();
 
-      if (start === null || end === null) {
-        locPosSpan = this._locPosSpan = BROKEN;
-      } else {
-        locPosSpan = this._locPosSpan = new HbsSpan(this.source, {
-          start,
-          end,
-        });
-      }
+      cache = this.#cache = new HbsSpan(this.source, {
+        start,
+        end,
+      });
     }
 
-    return locPosSpan === BROKEN ? null : locPosSpan;
+    return cache;
   }
 
-  serialize(): SerializedSourceSpan {
+  serialize(): SerializedSourceSpan[] {
     let {
       start: { charPos: start },
       end: { charPos: end },
     } = this.charPositions;
 
     if (start === end) {
-      return start;
+      return [start];
     } else {
-      return [start, end];
+      return [[start, end]];
     }
   }
 
@@ -461,30 +622,54 @@ class CharPositionSpan implements SpanData {
   }
 }
 
+interface HbsSpanPositions {
+  start: OffsetPosition | MissingPosition | BrokenPosition;
+  end: OffsetPosition | MissingPosition | BrokenPosition;
+}
+
 export class HbsSpan implements SpanData {
   readonly kind = OffsetKind.HbsPosition;
 
-  _charPosSpan: CharPositionSpan | BROKEN | null = null;
+  #charPosSpan: CharPositionSpan | BROKEN | null = null;
 
   // the source location from Handlebars + AST Plugins -- could be wrong
-  _providedHbsLoc: SourceLocation | null;
+  #providedHbsLoc: MutableSourceLocation | null;
 
   constructor(
     readonly template: SourceTemplate,
-    readonly hbsPositions: { start: HbsPosition; end: HbsPosition },
+    readonly positions: HbsSpanPositions,
     readonly error: SymbolicSyntaxError | null = null,
-    providedHbsLoc: SourceLocation | null = null
+    providedHbsLoc: MutableSourceLocation | null = null
   ) {
-    this._providedHbsLoc = providedHbsLoc;
+    this.#providedHbsLoc = providedHbsLoc;
+  }
+
+  classify(): 'concrete' | 'broken' {
+    const computed = this.#compute();
+
+    return computed === BROKEN ? 'broken' : 'concrete';
+  }
+
+  flat(): PresentArray<FlatSpan> {
+    return [this];
+  }
+
+  toAST(): SourceLocation {
+    return this.toHbsLoc();
   }
 
   getTemplate(): SourceTemplate {
     return this.template;
   }
 
-  serialize(): SerializedConcreteSourceSpan {
-    let charPos = this.toCharPosSpan();
-    return charPos === null ? OffsetKind.BrokenLocation : charPos.wrap().serialize();
+  serialize(): SerializedSourceSpan {
+    let charPos = this.#compute();
+
+    if (charPos === BROKEN) {
+      return OffsetKind.BrokenLocation;
+    } else {
+      return charPos.serialize();
+    }
   }
 
   wrap(): SourceSpan {
@@ -492,13 +677,13 @@ export class HbsSpan implements SpanData {
   }
 
   private updateProvided(pos: SourcePosition, edge: 'start' | 'end') {
-    if (this._providedHbsLoc) {
-      this._providedHbsLoc[edge] = pos;
+    if (this.#providedHbsLoc) {
+      this.#providedHbsLoc[edge] = pos;
     }
 
     // invalidate computed character offsets
-    this._charPosSpan = null;
-    this._providedHbsLoc = {
+    this.#charPosSpan = null;
+    this.#providedHbsLoc = {
       source: this.template.module,
       start: pos,
       end: pos,
@@ -508,18 +693,18 @@ export class HbsSpan implements SpanData {
   locDidUpdate({ start, end }: { start?: SourcePosition; end?: SourcePosition }): void {
     if (start !== undefined) {
       this.updateProvided(start, 'start');
-      this.hbsPositions.start = new HbsPosition(this.template, start, null);
+      this.positions.start = new OffsetPosition(this.template, start, null);
     }
 
     if (end !== undefined) {
       this.updateProvided(end, 'end');
-      this.hbsPositions.end = new HbsPosition(this.template, end, null);
+      this.positions.end = new OffsetPosition(this.template, end, null);
     }
   }
 
   asString(): string {
-    let span = this.toCharPosSpan();
-    return span === null ? '' : span.asString();
+    let span = this.#compute();
+    return span === BROKEN ? '' : span.asString();
   }
 
   getModule(): string {
@@ -527,70 +712,83 @@ export class HbsSpan implements SpanData {
   }
 
   getStart(): AnyPosition {
-    return this.hbsPositions.start;
+    return this.positions.start;
   }
 
   getEnd(): AnyPosition {
-    return this.hbsPositions.end;
+    return this.positions.end;
   }
 
   toHbsLoc(): SourceLocation {
-    return {
+    return SourceLocation(this.positions.start.toAST(), this.positions.end.toAST(), {
       source: this.template.module,
-      start: this.hbsPositions.start.hbsPos,
-      end: this.hbsPositions.end.hbsPos,
-    };
+    });
   }
 
   toHbsSpan(): HbsSpan {
     return this;
   }
 
-  toCharPosSpan(): CharPositionSpan | null {
-    let charPosSpan = this._charPosSpan;
+  #compute(): CharPositionSpan | BROKEN {
+    let charPosSpan = this.#charPosSpan;
 
     if (charPosSpan === null) {
-      let start = this.hbsPositions.start.toCharPos();
-      let end = this.hbsPositions.end.toCharPos();
+      let start = this.positions.start.toCharPos();
+      let end = this.positions.end.toCharPos();
 
-      if (start && end) {
-        charPosSpan = this._charPosSpan = new CharPositionSpan(this.template, {
+      if (start === BROKEN || end === BROKEN || start.charPos > end.charPos) {
+        this.#charPosSpan = charPosSpan = BROKEN;
+      } else {
+        this.#charPosSpan = charPosSpan = new CharPositionSpan(this.template, {
           start,
           end,
         });
-      } else {
-        charPosSpan = this._charPosSpan = BROKEN;
-        return null;
       }
     }
 
-    return charPosSpan === BROKEN ? null : charPosSpan;
+    return charPosSpan;
   }
 }
 
-class InvisibleSpan implements SpanData {
-  constructor(
-    readonly kind:
-      | OffsetKind.BrokenLocation
-      | OffsetKind.SyntheticSource
-      | OffsetKind.EmptySource
-      | OffsetKind.MissingLocation,
-    // whatever was provided, possibly broken
-    readonly loc: SpecialSourceLocation,
-    readonly template: SourceTemplate,
-    // if the span represents a synthetic string
-    readonly string: string | null = null
-  ) {}
+class SyntheticSpan implements SpanData {
+  readonly #override: {
+    start: SourcePosition | null;
+    end: SourcePosition | null;
+  } = {
+    start: null,
+    end: null,
+  };
+
+  constructor(readonly string: string, readonly template: SourceTemplate) {
+    assert(string.length > 0, `a synthetic string must have characters in it`);
+  }
+
+  classify(): 'concrete' | 'synthetic' | 'broken' {
+    throw new Error('Method not implemented.');
+  }
+
+  getPurpose(): SpecialPurpose | null {
+    return 'internal-synthetic';
+  }
+
+  flat(): PresentArray<FlatSpan> {
+    return [this];
+  }
+
+  toAST(): SourceLocation {
+    return SpecialSourceLocation('internal-synthetic', this.template);
+  }
+
+  get kind() {
+    return OffsetKind.SyntheticSource;
+  }
+
+  get #string() {
+    return this.string;
+  }
 
   serialize(): SerializedConcreteSourceSpan {
-    switch (this.kind) {
-      case OffsetKind.BrokenLocation:
-      case OffsetKind.EmptySource:
-      case OffsetKind.MissingLocation:
-        return this.kind;
-      case OffsetKind.SyntheticSource:
-        return this.string || '';
-    }
+    return this.#string;
   }
 
   getTemplate(): SourceTemplate {
@@ -602,16 +800,16 @@ class InvisibleSpan implements SpanData {
   }
 
   asString(): string {
-    return this.string || '';
+    return this.#string;
   }
 
   locDidUpdate({ start, end }: { start?: SourcePosition; end?: SourcePosition }) {
     if (start !== undefined) {
-      this.loc.start = start;
+      this.#override.start = start;
     }
 
     if (end !== undefined) {
-      this.loc.end = end;
+      this.#override.end = end;
     }
   }
 
@@ -620,96 +818,114 @@ class InvisibleSpan implements SpanData {
   }
 
   getStart(): AnyPosition {
-    return new AbsentPosition(this.kind, this.loc.start, this.template);
+    if (this.#override.start) {
+      return new OffsetPosition(this.template, this.#override.start);
+    } else {
+      return new SyntheticPosition(this.string, 0, this.template);
+    }
   }
 
   getEnd(): AnyPosition {
-    return new AbsentPosition(this.kind, this.loc.end, this.template);
+    if (this.#override.end) {
+      return new OffsetPosition(this.template, this.#override.end);
+    } else {
+      return new SyntheticPosition(this.string, this.string.length - 1, this.template);
+    }
   }
 
-  toCharPosSpan(): InvisibleSpan {
+  toCharPosSpan(): SyntheticSpan {
     return this;
-  }
-
-  toHbsSpan(): null {
-    return null;
-  }
-
-  toHbsLoc(): SourceLocation {
-    return BROKEN_LOCATION;
   }
 }
 
-export const span: MatchFn<SourceSpan> = match((m) =>
-  m
-    .when(OffsetKind.HbsPosition, OffsetKind.HbsPosition, (left, right) =>
-      new HbsSpan(left.template, {
-        start: left,
-        end: right,
-      }).wrap()
-    )
-    .when(OffsetKind.CharPosition, OffsetKind.CharPosition, (left, right) =>
-      new CharPositionSpan(left.template, {
-        start: left,
-        end: right,
-      }).wrap()
-    )
-    .when(OffsetKind.CharPosition, OffsetKind.HbsPosition, (left, right) => {
-      let rightCharPos = right.toCharPos();
+type ConcretePosition = OffsetPosition | CharPosition;
 
-      if (rightCharPos === null) {
-        return SourceSpan.missingLoc(left.template);
-      } else {
-        return span(left, rightCharPos);
+function isConcretePosition(position: AnyPosition): position is ConcretePosition {
+  return position.kind === OffsetKind.HbsPosition || position.kind === OffsetKind.CharPosition;
+}
+
+function joinConcrete(start: ConcretePosition, end: ConcretePosition): SourceSpan {
+  switch (start.kind) {
+    case OffsetKind.CharPosition: {
+      switch (end.kind) {
+        case OffsetKind.CharPosition: {
+          return new CharPositionSpan(start.template, {
+            start,
+            end,
+          }).wrap();
+        }
+        case OffsetKind.HbsPosition: {
+          let rightCharPos = end.toCharPos();
+
+          if (rightCharPos === BROKEN) {
+            return SourceSpan.brokenLoc(
+              start.template,
+              SpecialSourceLocation('broken', {
+                source: start.template.module,
+                start: start.toHbsPos().hbsPos,
+                end: end.toHbsPos().hbsPos,
+              })
+            );
+          } else {
+            return new CharPositionSpan(start.template, {
+              start,
+              end: rightCharPos,
+            }).wrap();
+          }
+        }
       }
-    })
-    .when(OffsetKind.HbsPosition, OffsetKind.CharPosition, (left, right) => {
-      let leftCharPos = left.toCharPos();
+    }
+    case OffsetKind.HbsPosition: {
+      switch (end.kind) {
+        case OffsetKind.CharPosition: {
+          let leftCharPos = start.toCharPos();
 
-      if (leftCharPos === null) {
-        return SourceSpan.missingLoc(left.template);
-      } else {
-        return span(leftCharPos, right);
+          if (leftCharPos === BROKEN) {
+            return SourceSpan.brokenLoc(
+              start.template,
+              SpecialSourceLocation('broken', {
+                source: start.template.module,
+                start: start.toHbsPos().hbsPos,
+                end: end.toHbsPos().hbsPos,
+              })
+            );
+          } else {
+            return new CharPositionSpan(start.template, {
+              start: leftCharPos,
+              end,
+            }).wrap();
+          }
+        }
+        case OffsetKind.HbsPosition: {
+          return new HbsSpan(start.template, {
+            start: start.toHbsPos(),
+            end: end.toHbsPos(),
+          }).wrap();
+        }
       }
-    })
-    .when(IsAbsent, MatchAny, (left) =>
-      new InvisibleSpan(left.kind, BROKEN_LOCATION, left.template).wrap()
-    )
-    .when(MatchAny, IsAbsent, (_, right) =>
-      new InvisibleSpan(right.kind, BROKEN_LOCATION, right.template).wrap()
-    )
-);
+    }
+  }
+}
 
-export type SerializedConcreteSourceSpan =
-  | /** collapsed */ number
-  | /** normal */ [start: number, size: number]
-  | /** synthetic */ string;
+function mergePurpose(
+  left: SpecialPurpose | undefined,
+  right: SpecialPurpose | undefined
+): SpecialPurpose | undefined {
+  if (left === undefined) {
+    return right;
+  }
 
-export type SerializedSourceSpan =
-  | SerializedConcreteSourceSpan
-  | OffsetKind.EmptySource
-  | ['broken', SerializedLocation];
+  if (right === undefined) {
+    return left;
+  }
 
-export type SerializedLocation<L extends SourceLocation = SourceLocation> =
-  `${L['start']['line']}:${L['start']['column']}-${L['end']['line']}:${L['end']['column']}`;
+  if (left === 'broken' || right === 'broken') {
+    return 'broken';
+  } else if (left === 'missing' || right === 'missing') {
+    return 'missing';
+  } else {
+    assertTypes<['internal-synthetic', 'internal-synthetic']>(left, right);
 
-function deserializeLocation(
-  template: SourceTemplate,
-  location: SerializedLocation
-): SourceLocation {
-  const [start, end] = location.split('-');
-  const [startLine, startColumn] = start.split(':');
-  const [endLine, endColumn] = end.split(':');
-
-  return {
-    source: template.module,
-    start: {
-      line: Number(startLine),
-      column: Number(startColumn),
-    },
-    end: {
-      line: Number(endLine),
-      column: Number(endColumn),
-    },
-  };
+    return 'internal-synthetic';
+  }
 }
