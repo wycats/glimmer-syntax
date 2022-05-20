@@ -14,6 +14,8 @@ export enum OffsetKind {
    */
   HbsPosition = 'HbsPosition',
 
+  Multi = 'Multi',
+
   /**
    * for (rare) situations where a node is created but there was no source location (e.g. the name
    * "default" in default blocks when the word "default" never appeared in source). This is used
@@ -22,15 +24,8 @@ export enum OffsetKind {
    *
    * type: absent
    */
-  SyntheticSource = 'InternalsSynthetic',
-  /**
-   * For situations where a node represents zero parts of the source (for example, empty arguments).
-   * In general, we attempt to assign these nodes *some* position (empty arguments can be
-   * positioned immediately after the callee), but it's not always possible
-   *
-   * type: absent
-   */
-  EmptySource = 'EmptySource',
+  SyntheticSource = 'SyntheticSource',
+
   /**
    * For situations where a source location was expected, but it didn't correspond to the node in
    * the source. This happens if a plugin creates broken locations.
@@ -59,6 +54,8 @@ export enum OffsetKind {
 export const IsAbsent = 'IS_ABSENT';
 export type IsAbsent = 'IS_ABSENT';
 
+export const IsBroken = 'IS_BROKEN';
+export type IsBroken = 'IS_BROKEN';
+
 export type ConcreteOffset = OffsetKind.HbsPosition | OffsetKind.CharPosition;
-export type AbsentOffset = OffsetKind.SyntheticSource | OffsetKind.EmptySource;
 export type BrokenOffset = OffsetKind.BrokenLocation | OffsetKind.MissingLocation;

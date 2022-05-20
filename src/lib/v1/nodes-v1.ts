@@ -1,4 +1,4 @@
-import type { SourceSpan } from '../source/span';
+import type { SourceSpan } from '../source/loc/source-span';
 import type { GlimmerSyntaxError } from '../syntax-error.js';
 import type { PresentArray } from '../utils/array.js';
 import type { Optional } from '../utils/exists.js';

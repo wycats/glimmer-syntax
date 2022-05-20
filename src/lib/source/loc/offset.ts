@@ -1,93 +1,174 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
+import { assert } from '../../utils/assert';
+import { existing } from '../../utils/exists';
 import type { SourcePosition } from '../../v1/api';
-import { UNKNOWN_POSITION } from '../location';
 import type { SourceTemplate } from '../source';
-import { type AbsentOffset, type BrokenOffset, IsAbsent, OffsetKind } from './kind.js';
-import { type Pattern, match, MatchAny } from './match';
-import type { SourceSpan } from './span';
-import { span } from './span';
+import { SourceSpan } from './source-span';
 
-export function patternFor(kind: OffsetKind): Pattern {
-  switch (kind) {
-    case OffsetKind.BrokenLocation:
-    case OffsetKind.SyntheticSource:
-    case OffsetKind.EmptySource:
-      return IsAbsent;
-    default:
-      return kind;
+interface ConcretePosition {
+  readonly template: SourceTemplate;
+  readonly offset: number | null;
+
+  toAST(): SourcePosition;
+  verify(): boolean;
+
+  move(chars: number): ConcretePosition;
+}
+
+export class OffsetPosition implements ConcretePosition {
+  #pos: SourcePosition | null;
+  readonly #offset: number;
+
+  constructor(
+    readonly template: SourceTemplate,
+    offset: number,
+    pos: SourcePosition | null = null
+  ) {
+    assert(
+      template.check(offset),
+      `offset must be in range of template. This shouldn't happen because @glimmer/syntax creates all of the offsets`
+    );
+
+    this.#offset = offset;
+    this.#pos = pos;
+  }
+
+  get offset(): number {
+    return this.#offset;
+  }
+
+  verify() {
+    return this.template.check(this.#offset);
+  }
+
+  move(chars: number): ConcretePosition {
+    return new OffsetPosition(this.template, this.#offset + chars, null);
+  }
+
+  /**
+   * Convert the current character offset to an `HbsPosition`, if it was not already computed. Once
+   * a `CharPosition` has computed its `HbsPosition`, it will not need to do compute it again, and
+   * the same `CharPosition` is retained when used as one of the ends of a `SourceSpan`, so
+   * computing the `HbsPosition` should be a one-time operation.
+   */
+  toAST(): SourcePosition {
+    let pos = this.#pos;
+
+    if (pos === null) {
+      this.#pos = pos = existing(
+        this.template.hbsPosFor(this.#offset),
+        `converting a character offset to a source location should always work, since @glimmer/syntax constructs the character offsets`
+      );
+    }
+
+    return pos;
   }
 }
 
-/**
- * All positions have these details in common. Most notably, all three kinds of positions can
- * must be able to attempt to convert themselves into {@see CharPosition}.
- */
-export interface PositionData {
-  readonly kind: OffsetKind;
-  toCharPos(): CharPosition | null;
-  toJSON(): SourcePosition;
+type AnyPosition = OffsetPosition | AstPosition | BrokenPosition;
+
+export class BrokenPosition implements ConcretePosition {
+  readonly offset = null;
+  #pos: SourcePosition;
+  #offset: number;
+
+  constructor(readonly template: SourceTemplate, pos: SourcePosition, offset = 0) {
+    this.#pos = pos;
+    this.#offset = offset;
+  }
+
+  move(chars: number): BrokenPosition {
+    return new BrokenPosition(this.template, this.#pos, this.#offset + chars);
+  }
+
+  verify(): boolean {
+    return false;
+  }
+
+  toAST() {
+    return this.#pos;
+  }
 }
 
-/**
- * Used to indicate that an attempt to convert a `SourcePosition` to a character offset failed. It
- * is separate from `null` so that `null` can be used to indicate that the computation wasn't yet
- * attempted (and therefore to cache the failure)
- */
-export const BROKEN = 'BROKEN';
-export type BROKEN = 'BROKEN';
+export class AstPosition implements ConcretePosition {
+  readonly #pos: SourcePosition;
+  readonly #offset: number;
+  #cache: BrokenPosition | OffsetPosition | null = null;
 
-export type AnyPosition = HbsPosition | CharPosition | AbsentPosition;
+  constructor(readonly template: SourceTemplate, pos: SourcePosition, offset = 0) {
+    this.#pos = pos;
+    this.#offset = offset;
+  }
 
-/**
- * A `SourceOffset` represents a single position in the source.
- *
- * There are three kinds of backing data for `SourceOffset` objects:
- *
- * - `CharPosition`, which contains a character offset into the raw source string
- * - `HbsPosition`, which contains a `SourcePosition` from the Handlebars AST, which can be
- *   converted to a `CharPosition` on demand.
- * - `InvisiblePosition`, which represents a position not in source (@see {InvisiblePosition})
- */
+  verify(): boolean {
+    return this.#compute().verify();
+  }
+
+  move(chars: number): ConcretePosition {
+    return new AstPosition(this.template, this.#pos, this.#offset + chars);
+  }
+
+  toAST(): SourcePosition {
+    return this.#pos;
+  }
+
+  convert(): BrokenPosition | OffsetPosition {
+    return this.#compute();
+  }
+
+  #compute(): BrokenPosition | OffsetPosition {
+    let cache = this.#cache;
+
+    if (cache === null) {
+      let pos = this.template.charPosFor(this.#pos);
+
+      if (pos === null) {
+        this.#cache = cache = new BrokenPosition(this.template, this.#pos);
+      } else {
+        this.#cache = cache = new OffsetPosition(this.template, pos + this.#offset);
+      }
+    }
+
+    return cache;
+  }
+
+  get offset(): number | null {
+    return this.#compute().offset;
+  }
+}
+
 export class SourceOffset {
-  /**
-   * Create a `SourceOffset` from a Handlebars `SourcePosition`. It's stored as-is, and converted
-   * into a character offset on demand, which avoids unnecessarily computing the offset of every
-   * `SourceLocation`, but also means that broken `SourcePosition`s are not always detected.
-   */
-  static forHbsPos(template: SourceTemplate, pos: SourcePosition): SourceOffset {
-    return new HbsPosition(template, pos, null).wrap();
+  static broken(template: SourceTemplate, pos: SourcePosition): SourceOffset {
+    return new SourceOffset(new BrokenPosition(template, pos));
   }
 
-  /**
-   * Create a `SourceOffset` that corresponds to a broken `SourcePosition`. This means that the
-   * calling code determined (or knows) that the `SourceLocation` doesn't correspond correctly to
-   * any part of the source.
-   */
-  static broken(template: SourceTemplate, pos: SourcePosition = UNKNOWN_POSITION): SourceOffset {
-    return new AbsentPosition(OffsetKind.BrokenLocation, pos, template).wrap();
+  static offset(template: SourceTemplate, offset: number): SourceOffset {
+    return new SourceOffset(new OffsetPosition(template, offset));
   }
 
-  constructor(readonly data: PositionData & AnyPosition) {}
+  static pos(template: SourceTemplate, pos: SourcePosition): SourceOffset {
+    return new SourceOffset(new AstPosition(template, pos));
+  }
+
+  #data: AnyPosition;
+
+  constructor(data: AnyPosition) {
+    this.#data = data;
+  }
+
+  get template(): SourceTemplate {
+    return this.#data.template;
+  }
+
+  toAST(): SourcePosition {
+    return this.#data.toAST();
+  }
 
   /**
    * Get the character offset for this `SourceOffset`, if possible.
    */
   get offset(): number | null {
-    let charPos = this.data.toCharPos();
-    return charPos === null ? null : charPos.offset;
-  }
-
-  /**
-   * Compare this offset with another one.
-   *
-   * If both offsets are `HbsPosition`s, they're equivalent as long as their lines and columns are
-   * the same. This avoids computing offsets unnecessarily.
-   *
-   * Otherwise, two `SourceOffset`s are equivalent if their successfully computed character offsets
-   * are the same.
-   */
-  eql(right: SourceOffset): boolean {
-    return eql(this.data, right.data);
+    return this.#data.offset;
   }
 
   /**
@@ -95,7 +176,26 @@ export class SourceOffset {
    * computing character offsets if both `SourceOffset`s are still lazy.
    */
   until(other: SourceOffset): SourceSpan {
-    return span(this.data, other.data);
+    const template = this.template;
+
+    return SourceSpan.from({
+      template,
+      offsets: {
+        start: this,
+        end: other,
+      },
+    });
+
+    // switch (this.data.kind) {
+    //   case OffsetKind.CharPosition:
+    //     switch (other.data.kind) {
+    //       case OffsetKind.CharPosition:
+    //         return new SourceSpan(new CharPositionSpan(this.data.template, { start: this.data,  end: other.data }));
+    //       case OffsetKind.HbsPosition:
+    //         return new SourceSpan(new CharPositionSpan(this.data.template, { start: this.data,  end: other.data.toCharPos() }));
+    //     }
+    //   }
+    // }
   }
 
   /**
@@ -108,17 +208,18 @@ export class SourceOffset {
    * returns a broken offset.
    */
   move(by: number): SourceOffset {
-    let charPos = this.data.toCharPos();
+    const template = this.template;
+    let offset = this.#data.offset;
 
-    if (charPos === null) {
-      return SourceOffset.broken(this.data.template);
+    if (offset === null) {
+      return SourceOffset.broken(template, this.#data.toAST());
     } else {
-      let result = charPos.offset + by;
+      let result = offset + by;
 
-      if (charPos.template.check(result)) {
-        return new CharPosition(charPos.template, result).wrap();
+      if (template.check(result)) {
+        return SourceOffset.offset(template, result);
       } else {
-        return SourceOffset.broken(this.data.template);
+        return SourceOffset.broken(template, this.#data.toAST());
       }
     }
   }
@@ -128,215 +229,24 @@ export class SourceOffset {
    * computing the character offset if it has not already been computed.
    */
   collapsed(): SourceSpan {
-    return span(this.data, this.data);
+    return SourceSpan.from({
+      template: this.template,
+      offsets: {
+        start: this,
+        end: this,
+      },
+    });
   }
 
   /**
-   * Convert this `SourceOffset` into a Handlebars {@see SourcePosition} for compatibility with
-   * existing plugins.
+   * Convert this `SourceOffset` into a Handlebars {@see SourcePosition} for
+   * compatibility with existing plugins.
+   *
+   * This might produce broken source positions if the original AST node had a
+   * broken position, so it should only be used informationally or in situations
+   * where the original code would have to be tolerant of a broken position.
    */
   toJSON(): SourcePosition {
-    return this.data.toJSON();
+    return this.toAST();
   }
 }
-
-export class CharPosition implements PositionData {
-  readonly kind = OffsetKind.CharPosition;
-
-  /** Computed from char offset */
-  _locPos: HbsPosition | BROKEN | null = null;
-
-  constructor(readonly template: SourceTemplate, readonly charPos: number) {}
-
-  /**
-   * This is already a `CharPosition`.
-   *
-   * {@see HbsPosition} for the alternative.
-   *
-   * @implements {PositionData}
-   */
-  toCharPos(): CharPosition {
-    return this;
-  }
-
-  /**
-   * Produce a Handlebars {@see SourcePosition} for this `CharPosition`. If this `CharPosition` was
-   * computed using {@see SourceOffset#move}, this will compute the `SourcePosition` for the offset.
-   *
-   * @implements {PositionData}
-   */
-  toJSON(): SourcePosition {
-    let hbs = this.toHbsPos();
-    return hbs === null ? UNKNOWN_POSITION : hbs.toJSON();
-  }
-
-  wrap(): SourceOffset {
-    return new SourceOffset(this);
-  }
-
-  /**
-   * A `CharPosition` always has an offset it can produce without any additional computation.
-   */
-  get offset(): number {
-    return this.charPos;
-  }
-
-  /**
-   * Convert the current character offset to an `HbsPosition`, if it was not already computed. Once
-   * a `CharPosition` has computed its `HbsPosition`, it will not need to do compute it again, and
-   * the same `CharPosition` is retained when used as one of the ends of a `SourceSpan`, so
-   * computing the `HbsPosition` should be a one-time operation.
-   */
-  toHbsPos(): HbsPosition | null {
-    let locPos = this._locPos;
-
-    if (locPos === null) {
-      let hbsPos = this.template.hbsPosFor(this.charPos);
-
-      if (hbsPos === null) {
-        this._locPos = locPos = BROKEN;
-      } else {
-        this._locPos = locPos = new HbsPosition(this.template, hbsPos, this.charPos);
-      }
-    }
-
-    return locPos === BROKEN ? null : locPos;
-  }
-}
-
-export class HbsPosition implements PositionData {
-  readonly kind = OffsetKind.HbsPosition;
-
-  _charPos: CharPosition | BROKEN | null;
-
-  constructor(
-    readonly template: SourceTemplate,
-    readonly hbsPos: SourcePosition,
-    charPos: number | null = null
-  ) {
-    this._charPos = charPos === null ? null : new CharPosition(template, charPos);
-  }
-
-  /**
-   * Lazily compute the character offset from the {@see SourcePosition}. Once an `HbsPosition` has
-   * computed its `CharPosition`, it will not need to do compute it again, and the same
-   * `HbsPosition` is retained when used as one of the ends of a `SourceSpan`, so computing the
-   * `CharPosition` should be a one-time operation.
-   *
-   * @implements {PositionData}
-   */
-  toCharPos(): CharPosition | null {
-    let charPos = this._charPos;
-
-    if (charPos === null) {
-      let charPosNumber = this.template.charPosFor(this.hbsPos);
-
-      if (charPosNumber === null) {
-        this._charPos = charPos = BROKEN;
-      } else {
-        this._charPos = charPos = new CharPosition(this.template, charPosNumber);
-      }
-    }
-
-    return charPos === BROKEN ? null : charPos;
-  }
-
-  /**
-   * Return the {@see SourcePosition} that this `HbsPosition` was instantiated with. This operation
-   * does not need to compute anything.
-   *
-   * @implements {PositionData}
-   */
-  toJSON(): SourcePosition {
-    return this.hbsPos;
-  }
-
-  wrap(): SourceOffset {
-    return new SourceOffset(this);
-  }
-
-  /**
-   * This is already an `HbsPosition`.
-   *
-   * {@see CharPosition} for the alternative.
-   */
-  toHbsPos(): HbsPosition {
-    return this;
-  }
-}
-
-export class BrokenPosition implements PositionData {
-  constructor(
-    readonly kind: BrokenOffset,
-    readonly loc: SourcePosition | null,
-    readonly template: SourceTemplate
-  ) {}
-
-  toCharPos(): null {
-    return null;
-  }
-  toJSON(): SourcePosition {
-    throw new Error('Method not implemented.');
-  }
-}
-
-export class AbsentPosition implements PositionData {
-  constructor(
-    readonly kind: AbsentOffset,
-    readonly pos: HbsPosition | null,
-    readonly template: SourceTemplate
-  ) {}
-
-  /**
-   * An absent position cannot be turned into a {@link CharPosition}.
-   */
-  toCharPos(): CharPosition | null {
-    return this.pos?.toCharPos() ?? null;
-  }
-
-  /**
-   * The serialization of an `InvisiblePosition is whatever Handlebars {@see SourcePosition} was
-   * originally identified as broken, non-existent or synthetic.
-   *
-   * If an `InvisiblePosition` never had an source offset at all, this method returns
-   * {@see UNKNOWN_POSITION} for compatibility.
-   */
-  toJSON(): SourcePosition {
-    return this.pos?.toJSON() ?? UNKNOWN_POSITION;
-  }
-
-  wrap(): SourceOffset {
-    return new SourceOffset(this);
-  }
-}
-
-/**
- * Compare two {@see AnyPosition} and determine whether they are equal.
- *
- * @see {SourceOffset#eql}
- */
-const eql = match<boolean>((m) =>
-  m
-    .when(
-      OffsetKind.HbsPosition,
-      OffsetKind.HbsPosition,
-      ({ hbsPos: left }, { hbsPos: right }) =>
-        left.column === right.column && left.line === right.line
-    )
-    .when(
-      OffsetKind.CharPosition,
-      OffsetKind.CharPosition,
-      ({ charPos: left }, { charPos: right }) => left === right
-    )
-    .when(
-      OffsetKind.CharPosition,
-      OffsetKind.HbsPosition,
-      ({ offset: left }, right) => left === right.toCharPos()?.offset
-    )
-    .when(
-      OffsetKind.HbsPosition,
-      OffsetKind.CharPosition,
-      (left, { offset: right }) => left.toCharPos()?.offset === right
-    )
-    .when(MatchAny, MatchAny, () => false)
-);

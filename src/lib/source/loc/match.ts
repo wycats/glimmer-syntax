@@ -1,10 +1,11 @@
 import { isPresent } from '../../utils/array.js';
 import { assert } from '../../utils/assert.js';
-import type { IsAbsent, IsBroken, IsError, OffsetKind } from './kind.js';
+import type { IsAbsent, IsBroken, OffsetKind } from './kind.js';
+import type { BrokenPosition } from './offset';
 import {
   type AbsentPosition,
   type CharPosition,
-  type HbsPosition,
+  type OffsetPosition,
   type PositionData,
   patternFor,
 } from './offset';
@@ -27,9 +28,11 @@ type Matches =
   | 'Hbs,Hbs'
   | 'Char,Char'
   | 'Invisible,Any'
-  | 'Any,Invisible';
+  | 'Any,Invisible'
+  | 'Broken,Any'
+  | 'Any,Broken';
 
-export type Pattern = OffsetKind | IsAbsent | IsError | IsBroken | MatchAny;
+export type Pattern = OffsetKind | IsAbsent | IsBroken | MatchAny;
 
 class WhenList<Out> {
   _whens: When<Out>[];
@@ -145,17 +148,17 @@ class Matcher<Out, M extends Matches = Matches> {
   when(
     left: OffsetKind.CharPosition,
     right: OffsetKind.HbsPosition,
-    callback: (left: CharPosition, right: HbsPosition) => Out
+    callback: (left: CharPosition, right: OffsetPosition) => Out
   ): ExhaustiveCheck<Out, M, 'Char,Hbs'>;
   when(
     left: OffsetKind.HbsPosition,
     right: OffsetKind.CharPosition,
-    callback: (left: HbsPosition, right: CharPosition) => Out
+    callback: (left: OffsetPosition, right: CharPosition) => Out
   ): ExhaustiveCheck<Out, M, 'Hbs,Char'>;
   when(
     left: OffsetKind.HbsPosition,
     right: OffsetKind.HbsPosition,
-    callback: (left: HbsPosition, right: HbsPosition) => Out
+    callback: (left: OffsetPosition, right: OffsetPosition) => Out
   ): ExhaustiveCheck<Out, M, 'Hbs,Hbs'>;
   when(
     left: OffsetKind.CharPosition,
@@ -163,15 +166,26 @@ class Matcher<Out, M extends Matches = Matches> {
     callback: (left: CharPosition, right: CharPosition) => Out
   ): ExhaustiveCheck<Out, M, 'Char,Char'>;
   when(
-    left: IsInvisible,
+    left: IsAbsent,
     right: MatchAny,
     callback: (left: AbsentPosition, right: PositionData) => Out
   ): Matcher<Out, Exclude<M, 'Invisible,Any'>>;
   when(
     left: MatchAny,
-    right: IsInvisible,
+    right: IsAbsent,
     callback: (left: PositionData, right: AbsentPosition) => Out
   ): ExhaustiveCheck<Out, M, 'Any,Invisible'>;
+  when(
+    left: IsBroken,
+    right: MatchAny,
+    callback: (left: BrokenPosition, right: PositionData) => Out
+  ): Matcher<Out, Exclude<M, 'Invisible,Any'>>;
+  when(
+    left: MatchAny,
+    right: IsBroken,
+    callback: (left: PositionData, right: BrokenPosition) => Out
+  ): ExhaustiveCheck<Out, M, 'Any,Invisible'>;
+
   when(
     left: MatchAny,
     right: MatchAny,

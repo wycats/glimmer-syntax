@@ -5,8 +5,9 @@ import {
 } from 'simple-html-tokenizer';
 
 import { Scope } from './parser/scope';
+import type { SourceOffset } from './source/loc/offset';
+import type { SourceSpan } from './source/loc/source-span';
 import type { SourceTemplate } from './source/source';
-import type { SourceOffset, SourceSpan } from './source/span';
 import type { GlimmerSyntaxError } from './syntax-error.js';
 import { isPresent } from './utils/array.js';
 import { assert } from './utils/assert.js';

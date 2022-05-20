@@ -1,6 +1,7 @@
 import type { Source } from './index';
+import type { SerializedSourceSpan } from './loc/serialize';
+import { SourceSpan } from './loc/source-span';
 import type { SourceTemplate } from './source';
-import { type SerializedSourceSpan, SourceSpan } from './span';
 
 export type SerializedSourceSlice<Chars extends string = string> = [
   chars: Chars,

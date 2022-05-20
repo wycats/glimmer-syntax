@@ -1,6 +1,10 @@
-import type * as ASTv1 from "../v1/api";
+import type * as ASTv1 from '../v1/api';
 
-const enum Char {
+/**
+ * FIXME: Don't use an enum here just because we used a const enum before. Use
+ * constants instead.
+ */
+enum Char {
   NBSP = 0xa0,
   QUOT = 0x22,
   LT = 0x3c,
@@ -9,19 +13,19 @@ const enum Char {
 }
 
 const ATTR_VALUE_REGEX_TEST = /[\xA0"&]/;
-const ATTR_VALUE_REGEX_REPLACE = new RegExp(ATTR_VALUE_REGEX_TEST.source, "g");
+const ATTR_VALUE_REGEX_REPLACE = new RegExp(ATTR_VALUE_REGEX_TEST.source, 'g');
 
 const TEXT_REGEX_TEST = /[\xA0&<>]/;
-const TEXT_REGEX_REPLACE = new RegExp(TEXT_REGEX_TEST.source, "g");
+const TEXT_REGEX_REPLACE = new RegExp(TEXT_REGEX_TEST.source, 'g');
 
 function attrValueReplacer(char: string): string {
   switch (char.charCodeAt(0)) {
     case Char.NBSP:
-      return "&nbsp;";
+      return '&nbsp;';
     case Char.QUOT:
-      return "&quot;";
+      return '&quot;';
     case Char.AMP:
-      return "&amp;";
+      return '&amp;';
     default:
       return char;
   }
@@ -30,13 +34,13 @@ function attrValueReplacer(char: string): string {
 function textReplacer(char: string): string {
   switch (char.charCodeAt(0)) {
     case Char.NBSP:
-      return "&nbsp;";
+      return '&nbsp;';
     case Char.AMP:
-      return "&amp;";
+      return '&amp;';
     case Char.LT:
-      return "&lt;";
+      return '&lt;';
     case Char.GT:
-      return "&gt;";
+      return '&gt;';
     default:
       return char;
   }
@@ -57,8 +61,8 @@ export function escapeText(text: string): string {
 }
 
 export function sortByLoc(a: ASTv1.Node, b: ASTv1.Node): -1 | 0 | 1 {
-  // If either is invisible, don't try to order them
-  if (a.loc.isInvisible || b.loc.isInvisible) {
+  // If either doesn't represent an in-source location, then don't try to order them.
+  if (!a.loc.verify() || !b.loc.verify()) {
     return 0;
   }
 

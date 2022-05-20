@@ -15,9 +15,10 @@ export function isLocatedWithPositionsArray(
   return isPresent(location) && location.every(isLocatedWithPositions);
 }
 
-export type Purpose = 'broken' | 'absent' | 'missing' | 'internal-synthetic';
+export type SpecialPurpose = 'broken' | 'missing' | 'internal-synthetic';
 
-export interface SpecialSourceLocation<P extends Purpose = Purpose> extends SourceLocation {
+export interface SpecialSourceLocation<P extends SpecialPurpose = SpecialPurpose>
+  extends SourceLocation {
   purpose: P;
 }
 
@@ -29,7 +30,6 @@ export const UNKNOWN_POSITION: SourcePosition = Object.freeze({
 export function SpecialSourceLocation(
   ...args:
     | [purpose: 'broken', loc: SourceLocation]
-    | [purpose: 'absent', loc: SourceLocation | SourceTemplate]
     | [purpose: 'missing', loc: SourceTemplate]
     | [purpose: 'internal-synthetic', template: SourceTemplate]
 ): SpecialSourceLocation<typeof args[0]> {
@@ -37,11 +37,10 @@ export function SpecialSourceLocation(
     case 'broken':
       return Object.freeze({ ...args[1], purpose: 'broken' }) as SpecialSourceLocation<'broken'>;
     case 'missing':
-    case 'absent':
       return Object.freeze({
         ...createLoc(args[1]),
         purpose: args[0],
-      }) as SpecialSourceLocation<'missing' | 'absent'>;
+      }) as SpecialSourceLocation<'missing'>;
     case 'internal-synthetic':
       return Object.freeze({
         start: UNKNOWN_POSITION,
@@ -50,6 +49,10 @@ export function SpecialSourceLocation(
         purpose: 'internal-synthetic',
       }) as SpecialSourceLocation<'internal-synthetic'>;
   }
+}
+
+export function isLocInSource(loc: SourceLocation): boolean {
+  return loc.purpose !== undefined;
 }
 
 function createLoc(loc: SourceTemplate | SourceLocation) {

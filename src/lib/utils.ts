@@ -388,7 +388,7 @@ function bareAttr(name: string, loc: SourceSpan): ASTv1.AttrNode {
     value: {
       type: 'TextNode',
       chars: '',
-      loc: SourceSpan.emptySource(loc.getTemplate()),
+      loc: SourceSpan.collapsed(loc.getTemplate()),
     },
     loc,
   };

@@ -12,7 +12,8 @@ import { assert } from '../utils/assert.js';
 import type { Optional } from '../utils/exists.js';
 import type { SourcePosition } from '../v1/handlebars-ast';
 import type * as HBS from '../v1/handlebars-ast';
-import { SourceOffset, SourceSpan } from './span';
+import { SourceOffset } from './loc/offset';
+import { SourceSpan } from './loc/source-span';
 
 export class SourceTemplate {
   constructor(
@@ -121,11 +122,11 @@ export class SourceTemplate {
   }
 
   offsetFor(line: number, column: number): SourceOffset {
-    return SourceOffset.forHbsPos(this, { line, column });
+    return SourceOffset.pos(this, { line, column });
   }
 
   spanFor({ start, end }: { start: SourcePosition; end: SourcePosition }): SourceSpan {
-    return SourceSpan.forHbsLoc(this, {
+    return SourceSpan.loc(this, {
       source: this.module,
       start: { line: start.line, column: start.column },
       end: { line: end.line, column: end.column },

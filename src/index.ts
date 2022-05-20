@@ -23,7 +23,7 @@ export {
 export { template } from './lib/parser/preprocess.js';
 export { SourceSlice } from './lib/source/slice';
 export { SourceTemplate } from './lib/source/source';
-export { SourceSpan } from './lib/source/span';
+export { SourceSpan } from './lib/source/loc/source-span';
 export type { HasSourceSpan, MaybeHasSourceSpan } from './lib/source/span-list';
 export { hasSpan, loc, maybeLoc, SpanList } from './lib/source/span-list';
 export { BlockSymbolTable, ProgramSymbolTable, SymbolTable } from './lib/symbol-table';

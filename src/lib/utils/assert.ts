@@ -25,3 +25,8 @@ export function exhaustive(_value: never, reason?: string): never {
     }. This error should never occur if there are no TypeScript errors.`
   );
 }
+
+export type Assert<T, U> = U extends T ? void : never;
+
+export function assertType<U>(_value: U): void {}
+export function assertTypes<T extends unknown[]>(...values: T): void {}

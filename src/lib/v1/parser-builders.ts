@@ -1,8 +1,8 @@
 import type { ParserNodeBuilder } from '../parser';
 import { Scope } from '../parser/scope';
+import type { SourceOffset } from '../source/loc/offset';
+import { SourceSpan } from '../source/loc/source-span';
 import type { SourceTemplate } from '../source/source.js';
-import type { SourceOffset } from '../source/span';
-import { SourceSpan } from '../source/span';
 import type { PresentArray } from '../utils/array.js';
 import { assert } from '../utils/assert.js';
 import type { Optional } from '../utils/exists.js';
@@ -386,25 +386,8 @@ export class Phase1Builder {
     return this.literal({ type: 'NumberLiteral', value, loc });
   }
 
-  span(loc: SourceLocation): SourceSpan;
-  span(purpose: 'broken', loc: SourceLocation): SourceSpan;
-  span(purpose: 'internals-synthetic' | 'missing'): SourceSpan;
-  span(
-    ...args:
-      | [loc: SourceLocation]
-      | [purpose: 'broken', loc: SourceLocation]
-      | [purpose: 'internals-synthetic' | 'missing']
-  ): SourceSpan {
-    switch (args[0]) {
-      case 'broken':
-        return SourceSpan.brokenLoc(this.#template, args[1]);
-      case 'internals-synthetic':
-        return SourceSpan.INTERNALS_SYNTHETIC(this.#template);
-      case 'missing':
-        return SourceSpan.missingLoc(this.#template);
-      default:
-        return this.#template.spanFor(args[0]);
-    }
+  span(loc: SourceLocation): SourceSpan {
+    return SourceSpan.loc(this.#template, loc);
   }
 }
 

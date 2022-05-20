@@ -6,6 +6,7 @@
  * https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/handlebars/index.d.ts.
  */
 
+import type { SpecialPurpose } from '../source/location';
 import type * as ASTv1 from './api';
 
 export interface CommonNode {
@@ -46,9 +47,34 @@ export type Node<T extends NodeType = NodeType> = NodeMap[T]['input'];
 export type Output<T extends NodeType> = NodeMap[T]['output'];
 
 export interface SourceLocation {
+  readonly purpose?: SpecialPurpose;
   readonly source: string;
   readonly start: SourcePosition;
   readonly end: SourcePosition;
+}
+
+export function SourceLocation(
+  start: SourcePosition,
+  end: SourcePosition,
+  options: { source: string }
+): SourceLocation {
+  return {
+    source: options.source,
+    start,
+    end,
+  };
+}
+
+/**
+ * Plugins are (for historical reasons) allowed to mutate the source location.
+ * This isn't really compatible with the way that the system works now, but we
+ * keep it working for now (in a limited way) for compatibility.
+ */
+export interface MutableSourceLocation {
+  readonly purpose?: SpecialPurpose;
+  readonly source: string;
+  start: SourcePosition;
+  end: SourcePosition;
 }
 
 export interface SourcePosition {

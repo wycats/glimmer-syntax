@@ -72,7 +72,7 @@ export type ToSourceSpan =
 
 function toSourceSpan(from: ToSourceSpan, template: SourceTemplate): SourceSpan {
   if (from === undefined) {
-    return SourceSpan.emptySource(template);
+    return SourceSpan.collapsed(template);
   } else if (from instanceof SourceSpan) {
     return from;
   } else if ('span' in from) {
@@ -133,7 +133,7 @@ function callOptions(
     hash: options?.hash ?? {
       type: 'Hash',
       pairs: [],
-      loc: SourceSpan.emptySource(span.getTemplate()),
+      loc: SourceSpan.collapsed(span.getTemplate()),
     },
   };
 }
