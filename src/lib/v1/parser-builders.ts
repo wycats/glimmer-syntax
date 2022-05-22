@@ -10,8 +10,6 @@ import type { Optional } from '../utils/exists.js';
 import type { Dict } from '../utils/object.js';
 import type * as ASTv1 from './api';
 import type { DeclaredAt, SourceLocation, SourcePosition } from './api';
-import type * as HBS from './handlebars-ast.js';
-import { ErrorExpression, ErrorStatement } from './handlebars-utils';
 import { PathExpressionImplV1 } from './legacy-interop';
 
 const DEFAULT_STRIP = {
@@ -166,14 +164,6 @@ export class Phase1Builder {
       value: value,
       loc,
     };
-  }
-
-  errorStatement(message: string, loc: SourceSpan): HBS.ErrorStatement {
-    return ErrorStatement(message, loc);
-  }
-
-  errorExpression(message: string, loc: SourceSpan): HBS.ErrorExpression {
-    return ErrorExpression(message, loc);
   }
 
   concat(

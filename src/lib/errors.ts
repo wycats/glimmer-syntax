@@ -1,5 +1,3 @@
-import type * as ASTv1 from './v1/nodes-v1.js';
-
 export enum ParserState {
   AttrName,
   AttrValue,
@@ -89,18 +87,21 @@ export const SYNTAX_ERRORS = {
   'hbs.syntax.invalid-variable': `Invalid variable: Variables must start with a-z or A-Z`,
   'hbs.syntax.unsupported-construct': (name: HbsConstruct) =>
     `Handlebars ${formatHbsConstruct(name, 'plural')} are not supported`,
-  'hbs.syntax.not-callable': (literal: ASTv1.Literal) => {
+  'hbs.syntax.not-callable': (literal: {
+    type: 'StringLiteral' | 'BooleanLiteral' | 'NumberLiteral' | 'NullLiteral' | 'UndefinedLiteral';
+    original?: string | number | boolean;
+  }) => {
     switch (literal.type) {
       case 'StringLiteral':
-        return `The string literal ${literal.original} is not callable`;
+        return `The string literal ${JSON.stringify(literal.original)} is not callable`;
       case 'BooleanLiteral':
         return `The literal ${literal.original} is not callable`;
       case 'NumberLiteral':
         return `The number literal ${literal.original} is not callable`;
       case 'NullLiteral':
-        return `The literal ${literal.original} is not callable`;
+        return `The literal null is not callable`;
       case 'UndefinedLiteral':
-        return `The literal ${literal.original} is not callable`;
+        return `The literal undefined is not callable`;
     }
   },
 

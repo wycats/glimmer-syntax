@@ -1,7 +1,6 @@
 import {
   Buildersv1,
   GlimmerSyntaxError,
-  HbsConstruct,
   ParserState,
   preprocess as parse,
   preprocess,
@@ -21,6 +20,10 @@ function syntaxError(source: string, error: SymbolicSyntaxError) {
   const result = preprocess.normalized(annotated.source, annotated.options);
 
   expect(result.errors, 'Expected syntax errors').toBeTruthy();
+
+  if (result.errors!.length > 1) {
+    console.log({ errors: result.errors });
+  }
   expect(result.errors, 'Expected exactly one syntax error').toHaveLength(1);
 
   const actualError: GlimmerSyntaxError = (result.errors as [GlimmerSyntaxError])[0];
@@ -576,7 +579,7 @@ describe('Parser - AST', () => {
     );
   });
 
-  test('a Handlebars comment in invalid element space', (assert) => {
+  test('a Handlebars comment in invalid element space', () => {
     syntaxError(`\nbefore <div \n  a|->{{! some comment }}<-| data-foo="bar"></div> after`, [
       'html.syntax.invalid-hbs-comment',
       ParserState.AttrName,
@@ -622,29 +625,23 @@ describe('Parser - AST', () => {
     astEqual(ast, b.program([b.mustache(b.path('foo'), [b.undefined()])]));
   });
 
-  test('Handlebars partial should error', (assert) => {
-    syntaxError(`|->{{> foo}}<-|`, ['hbs.syntax.unsupported-construct', HbsConstruct.Partial]);
+  test('Handlebars partial should error', () => {
+    syntaxError(`|->{{> foo}}<-|`, ['hbs.syntax.unsupported-construct', 'Partial']);
   });
 
-  test('Handlebars partial block should error', (assert) => {
-    syntaxError(`|->{{#> foo}}{{/foo}}<-|`, [
-      'hbs.syntax.unsupported-construct',
-      HbsConstruct.PartialBlock,
-    ]);
+  test('Handlebars partial block should error', () => {
+    syntaxError(`|->{{#> foo}}{{/foo}}<-|`, ['hbs.syntax.unsupported-construct', 'PartialBlock']);
   });
 
-  test('Handlebars decorator should error', (assert) => {
-    syntaxError(`|->{{* foo}}<-|`, ['hbs.syntax.unsupported-construct', HbsConstruct.Decorator]);
+  test('Handlebars decorator should error', () => {
+    syntaxError(`|->{{* foo}}<-|`, ['hbs.syntax.unsupported-construct', 'Decorator']);
   });
 
-  test('Handlebars decorator block should error', (assert) => {
-    syntaxError(`|->{{#* foo}}{{/foo}}<-|`, [
-      'hbs.syntax.unsupported-construct',
-      HbsConstruct.DecoratorBlock,
-    ]);
+  test('Handlebars decorator block should error', () => {
+    syntaxError(`|->{{#* foo}}{{/foo}}<-|`, ['hbs.syntax.unsupported-construct', 'DecoratorBlock']);
   });
 
-  test('disallowed mustaches in the tagName space', (assert) => {
+  test('disallowed mustaches in the tagName space', () => {
     syntaxError(`<|->{{"asdf"}}<-|></{{"asdf"}}>`, [
       'html.syntax.invalid-hbs-curly',
       ParserState.TagName,
@@ -683,38 +680,37 @@ describe('Parser - AST', () => {
     astEqual(ast, b.program([el]));
   });
 
-  test('path expression with "dangling dot" throws error', (assert) => {
+  test('path expression with "dangling dot" throws error', () => {
     syntaxError(`{{if foo|->.<-| bar baz}}`, 'hbs.syntax.invalid-dot');
   });
 
-  test('string literal as path throws error', (assert) => {
-    assert.throws(() => {
-      parse('{{("foo-baz")}}', { meta: { moduleName: 'test-module' } });
-    }, syntaxErrorFor(`StringLiteral "foo-baz" cannot be called as a sub-expression, replace ("foo-baz") with "foo-baz"`, '"foo-baz"', 'test-module', 1, 3));
+  test('string literal as path throws error', () => {
+    syntaxError(`{{(|->"foo-baz"<-|)}}`, [
+      'hbs.syntax.not-callable',
+      { type: 'StringLiteral', original: `foo-baz` },
+    ]);
   });
 
-  test('boolean literal as path throws error', (assert) => {
-    assert.throws(() => {
-      parse('{{(true)}}', { meta: { moduleName: 'test-module' } });
-    }, syntaxErrorFor(`BooleanLiteral "true" cannot be called as a sub-expression, replace (true) with true`, 'true', 'test-module', 1, 3));
+  test('boolean literal as path throws error', () => {
+    syntaxError(`{{(|->true<-|)}}`, [
+      'hbs.syntax.not-callable',
+      { type: 'BooleanLiteral', original: true },
+    ]);
   });
 
-  test('undefined literal as path throws error', (assert) => {
-    assert.throws(() => {
-      parse('{{(undefined)}}', { meta: { moduleName: 'test-module' } });
-    }, syntaxErrorFor(`UndefinedLiteral "undefined" cannot be called as a sub-expression, replace (undefined) with undefined`, 'undefined', 'test-module', 1, 3));
+  test('undefined literal as path throws error', () => {
+    syntaxError(`{{(|->undefined<-|)}}`, ['hbs.syntax.not-callable', { type: 'UndefinedLiteral' }]);
   });
 
-  test('null literal as path throws error', (assert) => {
-    assert.throws(() => {
-      parse('{{(null)}}', { meta: { moduleName: 'test-module' } });
-    }, syntaxErrorFor(`NullLiteral "null" cannot be called as a sub-expression, replace (null) with null`, 'null', 'test-module', 1, 3));
+  test('null literal as path throws error', () => {
+    syntaxError(`{{(|->null<-|)}}`, ['hbs.syntax.not-callable', { type: 'NullLiteral' }]);
   });
 
-  test('number literal as path throws error', (assert) => {
-    assert.throws(() => {
-      parse('{{(42)}}', { meta: { moduleName: 'test-module' } });
-    }, syntaxErrorFor(`NumberLiteral "42" cannot be called as a sub-expression, replace (42) with 42`, '42', 'test-module', 1, 3));
+  test('number literal as path throws error', () => {
+    syntaxError(`{{(|->42<-|)}}`, [
+      'hbs.syntax.not-callable',
+      { type: 'NumberLiteral', original: 42 },
+    ]);
   });
 });
 

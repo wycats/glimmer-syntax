@@ -1,23 +1,35 @@
-import type { SourceSpan } from '../source/loc/source-span';
+import type { GlimmerSyntaxError } from '../syntax-error';
 import type * as ASTv1 from './api';
 import type * as HBS from './handlebars-ast';
 
-export function ErrorStatement(message: string, loc: SourceSpan): HBS.ErrorStatement {
+export function ErrorStatement(
+  error: GlimmerSyntaxError,
+  message = error.message
+): HBS.ErrorStatement {
   return {
     type: 'MustacheCommentStatement',
-    error: true,
+    error,
     value: `<<ERROR: ${message}>>`,
-    loc,
+    loc: error.location,
   };
 }
 
-export function ErrorExpression(message: string, loc: SourceSpan): HBS.ErrorExpression {
+export function ToErrorStatement(error: HBS.ErrorExpression): HBS.ErrorStatement {
+  return {
+    type: 'MustacheCommentStatement',
+    error: error.error,
+    value: error.value,
+    loc: error.loc,
+  };
+}
+
+export function ErrorExpression(error: GlimmerSyntaxError, message = error.message): HBS.ErrorExpression {
   return {
     type: 'StringLiteral',
-    error: true,
+    error,
     value: `<<ERROR: ${message}>>`,
     original: JSON.stringify(message),
-    loc,
+    loc: error.location,
   };
 }
 

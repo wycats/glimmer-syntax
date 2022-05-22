@@ -1,20 +1,20 @@
-import type { AST } from '@glimmer/syntax';
+import type { ASTv1 } from '@glimmer/syntax';
 import { describe, expect, test } from 'vitest';
 import { parse } from './support/parse.js';
 
 // QUnit.module('[glimmer-syntax] Parser - Location Info');
 
-function assertNodeType<T extends keyof AST.Nodes>(
-  node: AST.Node | null | undefined,
+function assertNodeType<T extends keyof ASTv1.Nodes>(
+  node: ASTv1.Node | null | undefined,
   type: T
-): node is AST.Nodes[T] {
+): node is ASTv1.Nodes[T] {
   let nodeType = node && node.type;
   expect(node?.type, `expected node type`).toBe(type);
   return nodeType === type;
 }
 
 function locEqual(
-  node: AST.Node | null | undefined,
+  node: ASTv1.Node | null | undefined,
   startLine: number,
   startColumn: number,
   endLine: number,
@@ -58,15 +58,15 @@ describe('Parser - Location Info', () => {
         }}
       `);
 
-    let [, block] = ast.body as [any, AST.BlockStatement];
-    let [nestedBlock] = block.program.body as [AST.BlockStatement];
+    let [, block] = ast.body as [any, ASTv1.BlockStatement];
+    let [nestedBlock] = block.program.body as [ASTv1.BlockStatement];
     let [nestedBlockText] = nestedBlock.program.body;
     let nestedInverse = nestedBlock.inverse;
 
     locEqual(block, 2, 2, 9, 8, 'outer block');
     locEqual(nestedBlock, 3, 4, 7, 13, 'nested block');
     locEqual(nestedBlockText, 4, 0, 5, 0);
-    locEqual(nestedInverse as AST.Node, 5, 16, 7, 2);
+    locEqual(nestedInverse as ASTv1.Node, 5, 16, 7, 2);
   });
 
   test('mustache', () => {

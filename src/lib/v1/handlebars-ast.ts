@@ -7,14 +7,15 @@
  */
 
 import type { SpecialPurpose } from '../source/location';
+import type { GlimmerSyntaxError } from '../syntax-error';
 import type * as ASTv1 from './api';
 
 export interface CommonNode {
   loc: SourceLocation;
 }
 
-export type ErrorStatement = ASTv1.MustacheCommentStatement & { error: true };
-export type ErrorExpression = ASTv1.StringLiteral & { error: true };
+export type ErrorStatement = ASTv1.MustacheCommentStatement & { error: GlimmerSyntaxError };
+export type ErrorExpression = ASTv1.StringLiteral & { error: GlimmerSyntaxError };
 
 export interface NodeMap {
   Program: { input: Program; output: ASTv1.Template | ASTv1.Block };

@@ -1,9 +1,8 @@
 import {
   EntityParser,
   EventedTokenizer,
-  HTML5NamedCharRefs as namedCharRefs,
+  HTML5NamedCharRefs as namedCharRefs
 } from 'simple-html-tokenizer';
-
 import { Scope } from './parser/scope';
 import type { SourceOffset } from './source/loc/offset';
 import type { SourceSpan } from './source/loc/source-span';
@@ -11,10 +10,11 @@ import type { SourceTemplate } from './source/source';
 import type { GlimmerSyntaxError } from './syntax-error.js';
 import { isPresent } from './utils/array.js';
 import { assert } from './utils/assert.js';
-import { type Optional, existing } from './utils/exists.js';
+import { existing, type Optional } from './utils/exists.js';
 import { Stack } from './utils/stack.js';
 import type * as ASTv1 from './v1/api';
 import type * as HBS from './v1/handlebars-ast';
+import { ErrorExpression, ErrorStatement } from './v1/handlebars-utils';
 import { Phase1Builder } from './v1/parser-builders';
 
 export type ParserNodeBuilder<N extends { loc: SourceSpan }> = Omit<N, 'loc'> & {
@@ -69,6 +69,16 @@ export abstract class Parser {
 
   reportError(error: GlimmerSyntaxError): void {
     this.#errors.push(error);
+  }
+
+  reportExpressionError(error: GlimmerSyntaxError): HBS.ErrorExpression {
+    this.reportError(error);
+    return ErrorExpression(error);
+  }
+
+  reportStatementError(error: GlimmerSyntaxError): HBS.ErrorStatement {
+    this.reportError(error);
+    return ErrorStatement(error);
   }
 
   pushScope(locals: string[]): void {

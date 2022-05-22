@@ -1,18 +1,13 @@
-import {
-  formatHbsConstruct,
-  formatParserState,
-  ParserState,
-  type HbsConstruct,
-  type HbsErrorOptions
-} from '../errors.js';
+import { ParserState, type HbsConstruct, type HbsErrorOptions } from '../errors.js';
 import { Parser, type ParserNodeBuilder, type Tag } from '../parser';
 import { generateSyntaxError, GlimmerSyntaxError, type SymbolicSyntaxError } from '../syntax-error';
 import { appendChild, isHBSLiteral, printLiteral } from '../utils';
+import { exhaustive } from '../utils/assert';
 import type { Optional } from '../utils/exists.js';
 import type { Recast } from '../utils/types.js';
 import type * as ASTv1 from '../v1/api';
 import type * as HBS from '../v1/handlebars-ast';
-import { ErrorStatement, isErrorNode } from '../v1/handlebars-utils';
+import { ErrorStatement, ToErrorStatement } from '../v1/handlebars-utils';
 import type { Phase1Builder } from '../v1/parser-builders';
 
 export abstract class HandlebarsNodeVisitors extends Parser {
@@ -96,7 +91,7 @@ export abstract class HandlebarsNodeVisitors extends Parser {
     const result = this.#acceptCallNodes(this, block);
 
     if (result.type === 'err') {
-      return ErrorStatement(result.error.message, result.error.location);
+      return this.#forwardStatementError(result.error);
     }
 
     const { path, params, hash } = result.value;
@@ -161,7 +156,7 @@ export abstract class HandlebarsNodeVisitors extends Parser {
       );
 
       if (result.type === 'err') {
-        return ErrorStatement(result.error.message, result.error.location);
+        return this.#forwardStatementError(result.error);
       }
 
       const { path, params, hash } = result.value;
@@ -293,6 +288,28 @@ export abstract class HandlebarsNodeVisitors extends Parser {
     return comment;
   }
 
+  // #forwardExpressionError(error: GlimmerSyntaxError | HBS.ErrorExpression): HBS.ErrorExpression {
+  //   if (error instanceof GlimmerSyntaxError) {
+  //     return this.builder.errorExpression(error.message, error.location);
+  //   } else {
+  //     return error;
+  //   }
+  // }
+
+  #forwardStatementError(
+    error: GlimmerSyntaxError | HBS.ErrorStatement | HBS.ErrorExpression
+  ): HBS.ErrorStatement {
+    if (error instanceof GlimmerSyntaxError) {
+      return ErrorStatement(error);
+    } else if (error.type === 'StringLiteral') {
+      return ToErrorStatement(error);
+    } else if (error.type === 'MustacheCommentStatement') {
+      return error;
+    }
+
+    exhaustive(error);
+  }
+
   #invalidExpr(
     options: HbsErrorOptions | SymbolicSyntaxError,
     loc: HBS.SourceLocation
@@ -300,52 +317,32 @@ export abstract class HandlebarsNodeVisitors extends Parser {
     const span = this.source.spanFor(loc);
 
     if (typeof options === 'string' || Array.isArray(options)) {
-      this.reportError(GlimmerSyntaxError.from(options, this.source.spanFor(loc)));
+      return this.reportExpressionError(GlimmerSyntaxError.from(options, this.source.spanFor(loc)));
     } else {
-      this.reportError(
+      return this.reportExpressionError(
         GlimmerSyntaxError.from(['html.syntax.invalid-hbs-expression', options], span)
       );
     }
-
-    return this.builder.errorExpression(`Invalid expression`, span);
   }
 
-  #invalidComment(state: ParserState, loc: HBS.SourceLocation): ASTv1.MustacheCommentStatement {
-    this.reportError(
-      GlimmerSyntaxError.from(
-        ['html.syntax.invalid-hbs-comment', ParserState.AttrValue],
-        this.source.spanFor(loc)
-      )
-    );
-
-    return this.builder.errorStatement(
-      `Invalid comment${formatParserState(state)}`,
-      this.source.spanFor(loc)
+  #invalidComment(state: ParserState, loc: HBS.SourceLocation): HBS.ErrorStatement {
+    return this.reportStatementError(
+      GlimmerSyntaxError.from(['html.syntax.invalid-hbs-comment', state], this.source.spanFor(loc))
     );
   }
 
   #invalidCurly(state: ParserState, loc: HBS.SourceLocation): HBS.ErrorStatement {
-    this.reportError(
+    return this.reportStatementError(
       GlimmerSyntaxError.from(['html.syntax.invalid-hbs-curly', state], this.source.spanFor(loc))
-    );
-
-    return this.builder.errorStatement(
-      `Invalid mustache${formatParserState(state)}`,
-      this.source.spanFor(loc)
     );
   }
 
   #invalidHbsConstruct(construct: HbsConstruct, loc: HBS.SourceLocation): HBS.ErrorStatement {
-    this.reportError(
+    return this.reportStatementError(
       GlimmerSyntaxError.from(
         ['hbs.syntax.unsupported-construct', construct],
         this.source.spanFor(loc)
       )
-    );
-
-    return this.builder.errorStatement(
-      `invalid ${formatHbsConstruct(construct, 'singular')}`,
-      this.source.spanFor(loc)
     );
   }
 
@@ -369,7 +366,7 @@ export abstract class HandlebarsNodeVisitors extends Parser {
     const result = this.#acceptCallNodes(this, sexpr);
 
     if (result.type === 'err') {
-      return this.builder.errorExpression(result.error.message, result.error.location);
+      return this.reportExpressionError(result.error);
     }
 
     const { path, params, hash } = result.value;
@@ -551,16 +548,16 @@ export abstract class HandlebarsNodeVisitors extends Parser {
           hash: ASTv1.Hash;
         };
       }
-    | { type: 'err'; error: GlimmerSyntaxError | HBS.ErrorExpression } {
+    | { type: 'err'; error: GlimmerSyntaxError } {
     if (isLiteral(node.path)) {
-      const path = node.path as ASTv1.Literal;
-      const error = GlimmerSyntaxError.from(
-        ['hbs.syntax.not-callable', path],
-        this.source.spanFor(path.loc)
-      );
-
-      this.reportError(error);
-      return { type: 'err', error };
+      node.path;
+      return {
+        type: 'err',
+        error: GlimmerSyntaxError.from(
+          ['hbs.syntax.not-callable', node.path],
+          this.source.spanFor(node.path.loc)
+        ),
+      };
     }
 
     const path =
@@ -568,9 +565,8 @@ export abstract class HandlebarsNodeVisitors extends Parser {
         ? compiler.PathExpression(node.path)
         : compiler.SubExpression(node.path as unknown as HBS.SubExpression);
 
-    if (isErrorNode(path)) {
-      return { type: 'err', error: path };
-
+    if (path.type === 'StringLiteral') {
+      return { type: 'err', error: path.error };
     }
 
     const params = node.params

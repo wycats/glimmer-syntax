@@ -1,6 +1,5 @@
 import { preprocess as parse, print } from '@glimmer/syntax';
-
-const { test } = QUnit;
+import { describe, expect, test } from 'vitest';
 
 let templates = [
   '<h1></h1>',
@@ -60,30 +59,29 @@ let templates = [
   '<Foo {{!-- This is a comment --}} attribute></Foo>',
 ];
 
-QUnit.module('[glimmer-syntax] Code generation', () => {
+describe('Code generation', () => {
   function printTransform(template: string) {
     return print(parse(template));
   }
 
-  templates.forEach((template) => {
+  for (const template of templates) {
     test(`${template} is stable when printed`, (assert) => {
-      assert.equal(printTransform(template), template);
+      expect(printTransform(template)).toBe(template);
     });
-  });
+  }
 
   test('TextNode: chars escape - but do not match', (assert) => {
-    assert.equal(
-      printTransform('&lt; &amp; &nbsp; &gt; &copy;2018'),
+    expect(printTransform('&lt; &amp; &nbsp; &gt; &copy;2018')).toBe(
       '&lt; &amp; &nbsp; &gt; ©2018'
     );
   });
 
   test('Handlebars comment', (assert) => {
-    assert.equal(printTransform('{{! foo }}'), '{{!-- foo --}}');
+    expect(printTransform('{{! foo }}')).toBe('{{!-- foo --}}');
   });
 });
 
-QUnit.module('[glimmer-syntax] Code generation - source -> source', () => {
+describe('Code generation - source -> source', () => {
   function printTransform(template: string) {
     let ast = parse(template, {
       mode: 'codemod',
@@ -93,15 +91,8 @@ QUnit.module('[glimmer-syntax] Code generation - source -> source', () => {
     return print(ast, { entityEncoding: 'raw' });
   }
 
-  function buildTest(template: string) {
-    test(`${template} is stable when printed`, (assert) => {
-      assert.equal(printTransform(template), template);
-    });
-  }
-
-  templates.forEach(buildTest);
-
-  [
+  const all = [
+    ...templates,
     // custom HTML Entities
     '&lt; &amp; &nbsp; &gt; &copy;2018',
 
@@ -116,10 +107,16 @@ QUnit.module('[glimmer-syntax] Code generation - source -> source', () => {
     ' {{#foo}}\n  {{bar}}\n {{/foo}}',
 
     `<span class="stampFont" style="font-family: 'stampfont'">&#xf000;</span>`,
-  ].forEach(buildTest);
+  ];
+
+  for (const template of all) {
+    test(`${template} is stable when printed`, () => {
+      expect(printTransform(template)).toBe(template);
+    });
+  }
 });
 
-QUnit.module('[glimmer-syntax] Code generation - override', () => {
+describe('Code generation - override', () => {
   test('can provide a custom options.override to be used', (assert) => {
     let ast = parse(`<FooBar @baz="qux" @derp="qux" />`);
 
@@ -135,7 +132,7 @@ QUnit.module('[glimmer-syntax] Code generation - override', () => {
       },
     });
 
-    assert.equal(actual, `<FooBar @baz="ZOMG!!!!" @derp="qux" />`);
+    expect(actual).toBe(`<FooBar @baz="ZOMG!!!!" @derp="qux" />`);
   });
 
   test('maintains proper spacing when overriding hash', (assert) => {
@@ -153,7 +150,7 @@ QUnit.module('[glimmer-syntax] Code generation - override', () => {
       },
     });
 
-    assert.equal(actual, `{{foo-bar baz="ZOMG!!!!"}}`);
+    expect(actual).toBe(`{{foo-bar baz="ZOMG!!!!"}}`);
   });
 
   test('maintains proper spacing when overriding empty hash', (assert) => {
@@ -171,6 +168,6 @@ QUnit.module('[glimmer-syntax] Code generation - override', () => {
       },
     });
 
-    assert.equal(actual, `{{foo-bar derp}}`);
+    expect(actual).toBe(`{{foo-bar derp}}`);
   });
 });
