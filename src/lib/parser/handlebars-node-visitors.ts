@@ -1,8 +1,8 @@
 import {
   formatHbsConstruct,
   formatParserState,
-  HbsConstruct,
   ParserState,
+  type HbsConstruct,
   type HbsErrorOptions
 } from '../errors.js';
 import { Parser, type ParserNodeBuilder, type Tag } from '../parser';
@@ -12,7 +12,7 @@ import type { Optional } from '../utils/exists.js';
 import type { Recast } from '../utils/types.js';
 import type * as ASTv1 from '../v1/api';
 import type * as HBS from '../v1/handlebars-ast';
-import { ErrorStatement } from '../v1/handlebars-utils';
+import { ErrorStatement, isErrorNode } from '../v1/handlebars-utils';
 import type { Phase1Builder } from '../v1/parser-builders';
 
 export abstract class HandlebarsNodeVisitors extends Parser {
@@ -335,10 +335,7 @@ export abstract class HandlebarsNodeVisitors extends Parser {
     );
   }
 
-  #invalidHbsConstruct(
-    construct: HbsConstruct,
-    loc: HBS.SourceLocation
-  ): HBS.ErrorStatement {
+  #invalidHbsConstruct(construct: HbsConstruct, loc: HBS.SourceLocation): HBS.ErrorStatement {
     this.reportError(
       GlimmerSyntaxError.from(
         ['hbs.syntax.unsupported-construct', construct],
@@ -368,8 +365,15 @@ export abstract class HandlebarsNodeVisitors extends Parser {
     return this.#invalidHbsConstruct('DecoratorBlock', decoratorBlock.loc);
   }
 
-  SubExpression(sexpr: HBS.SubExpression): ASTv1.SubExpression {
+  SubExpression(sexpr: HBS.SubExpression): ASTv1.SubExpression | HBS.ErrorExpression {
     const result = this.#acceptCallNodes(this, sexpr);
+
+    if (result.type === 'err') {
+      return this.builder.errorExpression(result.error.message, result.error.location);
+    }
+
+    const { path, params, hash } = result.value;
+
     return this.builder.sexpr({
       path,
       params,
@@ -547,7 +551,7 @@ export abstract class HandlebarsNodeVisitors extends Parser {
           hash: ASTv1.Hash;
         };
       }
-    | { type: 'err'; error: GlimmerSyntaxError } {
+    | { type: 'err'; error: GlimmerSyntaxError | HBS.ErrorExpression } {
     if (isLiteral(node.path)) {
       const path = node.path as ASTv1.Literal;
       const error = GlimmerSyntaxError.from(
@@ -563,6 +567,11 @@ export abstract class HandlebarsNodeVisitors extends Parser {
       node.path.type === 'PathExpression'
         ? compiler.PathExpression(node.path)
         : compiler.SubExpression(node.path as unknown as HBS.SubExpression);
+
+    if (isErrorNode(path)) {
+      return { type: 'err', error: path };
+
+    }
 
     const params = node.params
       ? node.params.map((e) => compiler.acceptNode<ASTv1.Expression>(e))

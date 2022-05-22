@@ -1,4 +1,4 @@
-export { HbsConstruct, ParserState, SYNTAX_ERRORS } from './lib/errors';
+export { ParserState, SYNTAX_ERRORS, type HbsConstruct } from './lib/errors';
 export type { VoidSyntaxErrorName } from './lib/errors';
 export { default as print } from './lib/generation/print';
 export { sortByLoc } from './lib/generation/util';

@@ -35,7 +35,7 @@ export interface NodeMap {
     input: CommentStatement;
     output: ASTv1.MustacheCommentStatement | ErrorStatement | null;
   };
-  SubExpression: { input: SubExpression; output: ASTv1.SubExpression };
+  SubExpression: { input: SubExpression; output: ASTv1.SubExpression | ErrorExpression };
   PathExpression: { input: PathExpression; output: ASTv1.PathExpression | ErrorExpression };
   StringLiteral: { input: StringLiteral; output: ASTv1.StringLiteral };
   BooleanLiteral: { input: BooleanLiteral; output: ASTv1.BooleanLiteral };
