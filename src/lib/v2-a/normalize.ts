@@ -1,29 +1,28 @@
 import Printer from '../generation/printer';
 import type { NormalizedPreprocessOptions } from '../parser/preprocess';
+import type { SourceSpan } from '../source/loc/source-span.js';
 import { SourceSlice } from '../source/slice';
 import type { SourceTemplate } from '../source/source';
-import type { SourceSpan } from '../source/span';
 import { SpanList } from '../source/span-list';
 import type { BlockSymbolTable, ProgramSymbolTable } from '../symbol-table';
 import { SymbolTable } from '../symbol-table';
 import { generateSyntaxError, GlimmerSyntaxError } from '../syntax-error';
 import { isLowerCase, isUpperCase } from '../utils';
-import { type PresentArray, isPresent } from '../utils/array.js';
+import { isPresent, type PresentArray } from '../utils/array.js';
 import { assert } from '../utils/assert.js';
-import type { SourceLocation } from '../v1/api';
 import type * as ASTv1 from '../v1/api';
+import type { SourceLocation } from '../v1/api';
 import { Phase1Builder } from '../v1/parser-builders';
 import * as ASTv2 from './api';
 import type { BuildElement } from './builders';
-import { type CallParts, Phase2Builder } from './builders';
+import { Phase2Builder, type CallParts } from './builders';
 import {
-  type Resolution,
   AppendSyntaxContext,
   AttrValueSyntaxContext,
   BlockSyntaxContext,
   ComponentSyntaxContext,
   ModifierSyntaxContext,
-  SexpSyntaxContext,
+  SexpSyntaxContext, type Resolution
 } from './loose-resolution';
 
 export function normalize(source: SourceTemplate): [ast: ASTv2.Template, locals: string[]] {

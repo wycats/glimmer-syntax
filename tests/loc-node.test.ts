@@ -1,6 +1,5 @@
 import type { AST } from '@glimmer/syntax';
 import { describe, expect, test } from 'vitest';
-
 import { parse } from './support/parse.js';
 
 // QUnit.module('[glimmer-syntax] Parser - Location Info');

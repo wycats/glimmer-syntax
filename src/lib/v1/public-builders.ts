@@ -1,15 +1,14 @@
 import { LOCAL_DEBUG } from '@glimmer/local-debug-flags';
-
-import { type ModuleName, NormalizedPreprocessOptions, template } from '../parser/preprocess';
+import { NormalizedPreprocessOptions, template, type ModuleName } from '../parser/preprocess';
 import { Scope } from '../parser/scope';
+import { SourceSpan } from '../source/loc/source-span.js';
 import type { SourceTemplate } from '../source/source';
-import { SourceSpan } from '../source/span';
 import { isPresent } from '../utils/array.js';
 import { assert, deprecate } from '../utils/assert.js';
-import { type Optional, existing } from '../utils/exists.js';
+import { existing, type Optional } from '../utils/exists.js';
 import type { Dict } from '../utils/object.js';
-import type { SourceLocation, SourcePosition } from './api';
 import type * as ASTv1 from './api';
+import type { SourceLocation, SourcePosition } from './api';
 import { PathExpressionImplV1 } from './legacy-interop';
 
 // Statements
@@ -72,15 +71,15 @@ export type ToSourceSpan =
 
 function toSourceSpan(from: ToSourceSpan, template: SourceTemplate): SourceSpan {
   if (from === undefined) {
-    return SourceSpan.collapsed(template);
+    return SourceSpan.missing(template);
   } else if (from instanceof SourceSpan) {
     return from;
   } else if ('span' in from) {
     return from.span;
   } else if ('template' in from) {
-    return SourceSpan.forHbsLoc(from.template, from.hbs);
+    return SourceSpan.loc(from.template, from.hbs);
   } else {
-    return SourceSpan.forHbsLoc(template, from);
+    return SourceSpan.loc(template, from);
   }
 }
 
@@ -133,7 +132,7 @@ function callOptions(
     hash: options?.hash ?? {
       type: 'Hash',
       pairs: [],
-      loc: SourceSpan.collapsed(span.getTemplate()),
+      loc: SourceSpan.missing(span.getTemplate()),
     },
   };
 }
@@ -144,6 +143,7 @@ function mustacheOptions(
   options: MustacheOptions,
   template: SourceTemplate
 ): ASTv1.MustacheStatementParts {
+  console.log(options);
   const call = callOptions(path, scope, options, template);
 
   return {
@@ -260,11 +260,7 @@ export class PublicBuilders {
     strip?: ASTv1.StripFlags
   ): ASTv1.MustacheStatement {
     const normalize = (): MustacheOptions => {
-      if (params === undefined) {
-        return {
-          loc: undefined,
-        };
-      } else if (Array.isArray(params)) {
+      if (Array.isArray(params) || params === undefined) {
         return {
           params,
           hash,
@@ -276,6 +272,8 @@ export class PublicBuilders {
         return params;
       }
     };
+
+    console.log(normalize());
 
     return {
       type: 'MustacheStatement',

@@ -1,12 +1,11 @@
 /* eslint-disable no-console */
 import { LOCAL_DEBUG } from '@glimmer/local-debug-flags';
 import type { EntityParser } from 'simple-html-tokenizer';
-
 import { voidMap } from '../generation/printer';
 import type { Tag } from '../parser';
+import type { SourceSpan } from '../source/loc/source-span.js';
 import type { SourceTemplate } from '../source/source';
-import type { SourceOffset, SourceSpan } from '../source/span';
-import { type SymbolicSyntaxError, generateSyntaxError, GlimmerSyntaxError } from '../syntax-error';
+import { generateSyntaxError, GlimmerSyntaxError, type SymbolicSyntaxError } from '../syntax-error';
 import { appendChild, getBlockParams } from '../utils';
 import { isPresent } from '../utils/array.js';
 import { assert } from '../utils/assert.js';
@@ -475,7 +474,7 @@ export class TokenizerEventHandlers extends HandlebarsNodeVisitors {
       current.loc = current.loc.withEnd(this.offset());
     } else {
       // initially assume the text node is a single char
-      let loc: SourceOffset = this.offset();
+      let loc = this.offset();
 
       // the tokenizer line/column have already been advanced, correct location info
       if (char === '\n') {

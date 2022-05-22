@@ -2,6 +2,7 @@ import type { ParserNodeBuilder } from '../parser';
 import { Scope } from '../parser/scope';
 import type { SourceOffset } from '../source/loc/offset';
 import { SourceSpan } from '../source/loc/source-span';
+import { missing } from '../source/location.js';
 import type { SourceTemplate } from '../source/source.js';
 import type { PresentArray } from '../utils/array.js';
 import { assert } from '../utils/assert.js';
@@ -9,6 +10,8 @@ import type { Optional } from '../utils/exists.js';
 import type { Dict } from '../utils/object.js';
 import type * as ASTv1 from './api';
 import type { DeclaredAt, SourceLocation, SourcePosition } from './api';
+import type * as HBS from './handlebars-ast.js';
+import { ErrorExpression, ErrorStatement } from './handlebars-utils';
 import { PathExpressionImplV1 } from './legacy-interop';
 
 const DEFAULT_STRIP = {
@@ -165,6 +168,14 @@ export class Phase1Builder {
     };
   }
 
+  errorStatement(message: string, loc: SourceSpan): HBS.ErrorStatement {
+    return ErrorStatement(message, loc);
+  }
+
+  errorExpression(message: string, loc: SourceSpan): HBS.ErrorExpression {
+    return ErrorExpression(message, loc);
+  }
+
   concat(
     parts: PresentArray<ASTv1.TextNode | ASTv1.MustacheStatement>,
     loc: SourceSpan
@@ -274,7 +285,7 @@ export class Phase1Builder {
     loc: SourceSpan;
   }): ASTv1.PathExpression {
     let { original: originalHead } = headToString(head);
-    let original = [...originalHead, ...tail].join('.');
+    let original = [originalHead, ...tail].join('.');
 
     return new PathExpressionImplV1(original, head, tail, loc, this.#scope);
   }
@@ -285,6 +296,7 @@ export class Phase1Builder {
     } else if (head === 'this') {
       return this.this(loc);
     } else {
+      console.log({ head });
       return this.var(head, loc);
     }
   }
@@ -386,8 +398,12 @@ export class Phase1Builder {
     return this.literal({ type: 'NumberLiteral', value, loc });
   }
 
-  span(loc: SourceLocation): SourceSpan {
-    return SourceSpan.loc(this.#template, loc);
+  span(loc: SourceLocation | 'missing'): SourceSpan {
+    if (loc === 'missing') {
+      return SourceSpan.loc(this.#template, missing(this.#template));
+    } else {
+      return SourceSpan.loc(this.#template, loc);
+    }
   }
 }
 

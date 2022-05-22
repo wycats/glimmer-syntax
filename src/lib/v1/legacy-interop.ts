@@ -1,5 +1,5 @@
 import type { Scope } from '../parser/scope';
-import type { SourceSpan } from '../source/span';
+import type { SourceSpan } from '../source/loc/source-span.js';
 import type { PathExpression, PathHead } from './nodes-v1';
 import { Phase1Builder } from './parser-builders';
 

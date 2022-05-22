@@ -1,9 +1,9 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import type { PresentArray } from '../utils/array.js';
 import { existing } from '../utils/exists.js';
+import type { SourceOffset } from './loc/offset.js';
+import { SourceSpan } from './loc/source-span.js';
 import type { LocatedWithOptionalSpan, LocatedWithSpan } from './location';
-import type { SourceOffset } from './span';
-import { SourceSpan } from './span';
 
 export type HasSpan = SourceSpan | LocatedWithSpan | PresentArray<LocatedWithSpan>;
 export type MaybeHasSpan = SourceSpan | LocatedWithOptionalSpan | LocatedWithOptionalSpan[] | null;

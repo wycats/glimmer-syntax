@@ -1,17 +1,16 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { DEBUG } from '@glimmer/env';
 import { parse, parseWithoutProcessing } from '@handlebars/parser';
-
 import type { ASTv1 } from '../../index';
 import { getEmbedderLocals } from '../get-template-locals';
-import { type ASTPluginEnvironment, CodemodEntityParser, Syntax } from '../parser/plugins';
+import { CodemodEntityParser, Syntax, type ASTPluginEnvironment } from '../parser/plugins';
 import type { NormalizedPreprocessOptions } from '../parser/preprocess';
 import { TokenizerEventHandlers } from '../parser/tokenizer-event-handlers';
 import traverse from '../traversal/traverse';
 import { assert } from '../utils/assert.js';
 import type { Optional } from '../utils/exists.js';
-import type { SourcePosition } from '../v1/handlebars-ast';
 import type * as HBS from '../v1/handlebars-ast';
+import type { SourcePosition } from '../v1/handlebars-ast';
 import { SourceOffset } from './loc/offset';
 import { SourceSpan } from './loc/source-span';
 
@@ -57,7 +56,7 @@ export class SourceTemplate {
         return ast;
       }
     } else {
-      return this.applyPlugins(this.parse(this.handlebarsAST));
+      return this.applyPlugins(ast);
     }
   }
 
@@ -91,7 +90,14 @@ export class SourceTemplate {
     if (this.ast === null) {
       const ast = (this.ast = this.parseHBS());
 
-      const offsets = SourceSpan.forCharPositions(this, 0, this.source?.length ?? 0);
+      const offsets = SourceSpan.from({
+        template: this,
+        offsets: {
+          start: SourceOffset.offset(this, 0),
+          end: SourceOffset.offset(this, this.source?.length ?? 0),
+        },
+      });
+
       ast.loc = {
         source: '(program)',
         start: offsets.startPosition,

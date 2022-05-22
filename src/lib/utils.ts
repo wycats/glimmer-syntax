@@ -1,6 +1,6 @@
-import { SourceSpan } from './source/span';
+import { SourceSpan } from './source/loc/source-span.js';
 import { GlimmerSyntaxError } from './syntax-error';
-import { type Maybe, type Optional, existing } from './utils/exists.js';
+import { existing, type Maybe, type Optional } from './utils/exists.js';
 import type * as ASTv1 from './v1/api';
 import type * as HBS from './v1/handlebars-ast';
 
@@ -388,7 +388,7 @@ function bareAttr(name: string, loc: SourceSpan): ASTv1.AttrNode {
     value: {
       type: 'TextNode',
       chars: '',
-      loc: SourceSpan.collapsed(loc.getTemplate()),
+      loc: SourceSpan.missing(loc.getTemplate()),
     },
     loc,
   };

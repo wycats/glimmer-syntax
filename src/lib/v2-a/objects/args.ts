@@ -1,7 +1,7 @@
-import type { SourceSlice } from "../../source/slice";
-import type { SourceSpan } from "../../source/span";
-import type { ExpressionNode } from "./expr";
-import { node } from "./node";
+import type { SourceSpan } from '../../source/loc/source-span.js';
+import type { SourceSlice } from '../../source/slice';
+import type { ExpressionNode } from './expr';
+import { node } from './node';
 
 /**
  * Corresponds to syntaxes with positional and named arguments:
@@ -29,7 +29,7 @@ export class Args extends node().fields<{
   static named(named: NamedArguments): Args {
     return new Args({
       loc: named.loc,
-      positional: PositionalArguments.empty(named.loc.collapse("end")),
+      positional: PositionalArguments.empty(named.loc.collapse('end')),
       named,
     });
   }

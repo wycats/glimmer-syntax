@@ -1,5 +1,5 @@
+import type { SerializedSourceSpan } from '../../source/loc/serialize.js';
 import type { SerializedSourceSlice } from '../../source/slice';
-import type { SerializedSourceSpan } from '../../source/span';
 import type { PresentArray } from '../../utils/array.js';
 import type * as ASTv2 from '../api';
 

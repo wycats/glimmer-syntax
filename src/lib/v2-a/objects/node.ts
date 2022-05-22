@@ -1,4 +1,4 @@
-import type { SourceSpan } from '../../source/span';
+import type { SourceSpan } from '../../source/loc/source-span.js';
 import type { Dict } from '../../utils/object.js';
 
 export interface BaseNodeFields {

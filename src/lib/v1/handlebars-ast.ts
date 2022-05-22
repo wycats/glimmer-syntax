@@ -13,27 +13,30 @@ export interface CommonNode {
   loc: SourceLocation;
 }
 
+export type ErrorStatement = ASTv1.MustacheCommentStatement & { error: true };
+export type ErrorExpression = ASTv1.StringLiteral & { error: true };
+
 export interface NodeMap {
   Program: { input: Program; output: ASTv1.Template | ASTv1.Block };
   MustacheStatement: {
     input: MustacheStatement;
-    output: ASTv1.MustacheStatement | void;
+    output: ASTv1.MustacheStatement | ErrorStatement | void;
   };
-  Decorator: { input: Decorator; output: never };
+  Decorator: { input: Decorator; output: ErrorStatement };
   BlockStatement: {
     input: BlockStatement;
-    output: ASTv1.BlockStatement | void;
+    output: ASTv1.BlockStatement | ErrorStatement | void;
   };
-  DecoratorBlock: { input: DecoratorBlock; output: never };
-  PartialStatement: { input: PartialStatement; output: never };
-  PartialBlockStatement: { input: PartialBlockStatement; output: never };
+  DecoratorBlock: { input: DecoratorBlock; output: ErrorStatement };
+  PartialStatement: { input: PartialStatement; output: ErrorStatement };
+  PartialBlockStatement: { input: PartialBlockStatement; output: ErrorStatement };
   ContentStatement: { input: ContentStatement; output: void };
   CommentStatement: {
     input: CommentStatement;
-    output: ASTv1.MustacheCommentStatement | null;
+    output: ASTv1.MustacheCommentStatement | ErrorStatement | null;
   };
   SubExpression: { input: SubExpression; output: ASTv1.SubExpression };
-  PathExpression: { input: PathExpression; output: ASTv1.PathExpression };
+  PathExpression: { input: PathExpression; output: ASTv1.PathExpression | ErrorExpression };
   StringLiteral: { input: StringLiteral; output: ASTv1.StringLiteral };
   BooleanLiteral: { input: BooleanLiteral; output: ASTv1.BooleanLiteral };
   NumberLiteral: { input: NumberLiteral; output: ASTv1.NumberLiteral };

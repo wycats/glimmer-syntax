@@ -2,6 +2,7 @@
 import { assert } from '../../utils/assert';
 import { existing } from '../../utils/exists';
 import type { SourcePosition } from '../../v1/api';
+import { UNKNOWN_POSITION } from '../index.js';
 import type { SourceTemplate } from '../source';
 import { SourceSpan } from './source-span';
 
@@ -140,6 +141,10 @@ export class AstPosition implements ConcretePosition {
 export class SourceOffset {
   static broken(template: SourceTemplate, pos: SourcePosition): SourceOffset {
     return new SourceOffset(new BrokenPosition(template, pos));
+  }
+
+  static missing(template: SourceTemplate): SourceOffset {
+    return new SourceOffset(new BrokenPosition(template, UNKNOWN_POSITION));
   }
 
   static offset(template: SourceTemplate, offset: number): SourceOffset {

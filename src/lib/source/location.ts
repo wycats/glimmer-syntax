@@ -1,7 +1,7 @@
-import { type PresentArray, isPresent } from '../utils/array';
+import { isPresent, type PresentArray } from '../utils/array';
 import type { SourceLocation, SourcePosition } from '../v1/handlebars-ast';
+import type { SourceSpan } from './loc/source-span.js';
 import type { SourceTemplate } from './source';
-import type { SourceSpan } from './span';
 
 export type LocatedWithSpan = { offsets: SourceSpan };
 export type LocatedWithOptionalSpan = { offsets: SourceSpan | null };
@@ -26,6 +26,10 @@ export const UNKNOWN_POSITION: SourcePosition = Object.freeze({
   line: 1,
   column: 0,
 });
+
+export function missing(template: SourceTemplate): SourceLocation {
+  return SpecialSourceLocation('missing', template);
+}
 
 export function SpecialSourceLocation(
   ...args:

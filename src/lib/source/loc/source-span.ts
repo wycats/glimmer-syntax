@@ -1,13 +1,12 @@
 import { DEBUG } from '@glimmer/env';
-
 import type { PresentArray } from '../../utils/array';
 import type { SourceLocation, SourcePosition } from '../../v1/handlebars-ast';
+import { UNKNOWN_POSITION } from '../index.js';
 import { SourceSlice } from '../slice';
 import type { SourceTemplate } from '../source';
 import { format, FormatSpan } from './format';
-import type { BrokenPosition } from './offset';
-import { SourceOffset } from './offset';
-import { type SerializedSourceSpan, serializeBroken, serializeOffsets } from './serialize';
+import { BrokenPosition, SourceOffset } from './offset';
+import { serializeBroken, serializeOffsets, type SerializedSourceSpan } from './serialize';
 
 export interface SpanInterface {
   readonly module: string;
@@ -45,14 +44,34 @@ export interface SpanInterface {
 interface SpanData {
   readonly template: SourceTemplate;
   readonly offsets: {
-    start: SourceOffset | BrokenPosition;
-    end: SourceOffset | BrokenPosition;
+    start: SourceOffset;
+    end: SourceOffset;
   };
 }
 
 export abstract class SourceSpan implements SpanInterface, SourceLocation {
   static from(data: SpanData): SourceSpan {
     return new ConcreteSpan(data);
+  }
+
+  static offsets(template: SourceTemplate, start: number, end: number): SourceSpan {
+    return SourceSpan.from({
+      template,
+      offsets: {
+        start: SourceOffset.offset(template, start),
+        end: SourceOffset.offset(template, end),
+      },
+    });
+  }
+
+  static missing(template: SourceTemplate): SourceSpan {
+    return SourceSpan.from({
+      template,
+      offsets: {
+        start: SourceOffset.missing(template),
+        end: SourceOffset.missing(template),
+      },
+    });
   }
 
   static loc(template: SourceTemplate, ast: SourceLocation): SourceSpan {
@@ -65,24 +84,17 @@ export abstract class SourceSpan implements SpanInterface, SourceLocation {
     });
   }
 
-  static synthetic(
-    template: SourceTemplate,
-    offsets: { start: SourceOffset; end: SourceOffset },
-    string: string
-  ): SourceSpan {
-    return new SyntheticSpan(template, offsets, string);
+  static synthetic(template: SourceTemplate, string: string): SourceSpan {
+    return new SyntheticSpan(template, string);
   }
 
   readonly #data: SpanData;
   readonly #overrides: {
-    readonly start: SourceOffset | BrokenPosition | null;
-    readonly end: SourceOffset | BrokenPosition | null;
+    readonly start: SourceOffset | null;
+    readonly end: SourceOffset | null;
   };
 
-  constructor(
-    data: SpanData,
-    overrides?: { start?: SourceOffset | BrokenPosition; end?: SourceOffset | BrokenPosition }
-  ) {
+  constructor(data: SpanData, overrides?: { start?: SourceOffset; end?: SourceOffset }) {
     this.#data = data;
     this.#overrides = {
       start: overrides?.start ?? null,
@@ -156,11 +168,11 @@ export abstract class SourceSpan implements SpanInterface, SourceLocation {
     return this.#data.template.module;
   }
 
-  getStart(): SourceOffset | BrokenPosition {
+  getStart(): SourceOffset {
     return this.#overrides.start ?? this.#data.offsets.start;
   }
 
-  getEnd(): SourceOffset | BrokenPosition {
+  getEnd(): SourceOffset {
     return this.#overrides.end ?? this.#data.offsets.end;
   }
 
@@ -201,7 +213,7 @@ export abstract class SourceSpan implements SpanInterface, SourceLocation {
     }
   }
 
-  #span(start: SourceOffset | BrokenPosition, end: SourceOffset | BrokenPosition): SourceSpan {
+  #span(start: SourceOffset, end: SourceOffset): SourceSpan {
     return SourceSpan.from({
       template: this.#data.template,
       offsets: {
@@ -399,7 +411,7 @@ export class ConcreteSpan extends SourceSpan {
     }
   }
 
-  withStart(start: SourceOffset | BrokenPosition): SourceSpan {
+  withStart(start: SourceOffset): SourceSpan {
     return SourceSpan.from({
       template: this.getTemplate(),
       offsets: {
@@ -409,7 +421,7 @@ export class ConcreteSpan extends SourceSpan {
     });
   }
 
-  withEnd(end: SourceOffset | BrokenPosition): SourceSpan {
+  withEnd(end: SourceOffset): SourceSpan {
     return SourceSpan.from({
       template: this.getTemplate(),
       offsets: {
@@ -460,12 +472,14 @@ export class ConcreteSpan extends SourceSpan {
 export class SyntheticSpan extends SourceSpan {
   readonly #string: string;
 
-  constructor(
-    template: SourceTemplate,
-    offsets: { start: SourceOffset | BrokenPosition; end: SourceOffset | BrokenPosition },
-    string: string
-  ) {
-    super({ template, offsets });
+  constructor(template: SourceTemplate, string: string) {
+    super({
+      template,
+      offsets: {
+        start: SourceOffset.broken(template, UNKNOWN_POSITION),
+        end: SourceOffset.broken(template, UNKNOWN_POSITION),
+      },
+    });
     this.#string = string;
   }
 
@@ -508,11 +522,7 @@ export class MultiSpan extends SourceSpan {
 
     // If all of the spans are synthetic, just make a single synthetic span
     if (concrete.length === 0) {
-      return new SyntheticSpan(
-        template,
-        { start: spans[0].getStart(), end: spans[spans.length - 1].getEnd() },
-        spans.map((span) => span.asString()).join('')
-      );
+      return new SyntheticSpan(template, spans.map((span) => span.asString()).join(''));
     }
 
     // If all of the spans are concrete, just make a single concrete span
@@ -542,7 +552,7 @@ export class MultiSpan extends SourceSpan {
 
   constructor(
     template: SourceTemplate,
-    offsets: { start: SourceOffset | BrokenPosition; end: SourceOffset | BrokenPosition },
+    offsets: { start: SourceOffset; end: SourceOffset },
     spans: SourceSpan[],
     concrete: PresentArray<ConcreteSpan>
   ) {

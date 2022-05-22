@@ -1,6 +1,5 @@
 import type { ASTv1, PreprocessOptions } from '@glimmer/syntax';
 import { expect } from 'vitest';
-
 import { parse } from './support/parse.js';
 
 type NodeInput = ASTv1.Node | ASTv1.Node[];
@@ -48,6 +47,12 @@ export function astEqual(
 
   if (typeof actual === 'string') {
     actual = parse(actual, { throwErrors: false, ...parseOptions });
+
+    if (actual.errors?.length) {
+      throw Error(
+        `astEqual requires actual to be valid, actual had ${actual.errors.length} errors\n\n${actual.errors[0].message}`
+      );
+    }
   }
   if (typeof expected === 'string') {
     expected = parse(expected, { throwErrors: false, ...parseOptions });

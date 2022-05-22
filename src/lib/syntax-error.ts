@@ -1,5 +1,5 @@
-import { type VoidSyntaxErrorName, SYNTAX_ERRORS } from './errors';
-import type { SourceSpan } from './source/span';
+import { SYNTAX_ERRORS, type VoidSyntaxErrorName } from './errors';
+import type { SourceSpan } from './source/loc/source-span.js';
 
 export type SymbolicSyntaxError =
   | VoidSyntaxErrorName

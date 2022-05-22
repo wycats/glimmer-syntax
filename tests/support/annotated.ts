@@ -1,40 +1,43 @@
 import type { SourceTemplate } from '@glimmer/syntax';
 import {
-  type NormalizedPreprocessFields,
   NormalizedPreprocessOptions,
   SourceSpan,
   template,
+  type NormalizedPreprocessFields,
 } from '@glimmer/syntax';
+
+const OPEN = `|->`;
+const CLOSE = `<-|`;
 
 export class AnnotatedSource {
   static from(annotated: string, options?: Partial<NormalizedPreprocessFields>) {
-    const open = annotated.indexOf('~#');
+    const open = annotated.indexOf(OPEN);
 
     if (open === -1) {
-      throw new Error(`Expected to find a ~# in ${annotated}`);
+      throw new Error(`Expected to find a ${OPEN} in ${annotated}`);
     }
 
-    const secondOpen = annotated.indexOf('~#', open + 1);
+    const secondOpen = annotated.indexOf(OPEN, open + 1);
 
     if (secondOpen !== -1) {
-      throw Error(`Expected only one ~# in ${annotated}`);
+      throw Error(`Expected only one ${OPEN} in ${annotated}`);
     }
 
-    const close = annotated.indexOf('#~');
+    const close = annotated.indexOf(CLOSE);
 
     if (close === -1) {
-      throw new Error(`Expected to find a #~ in ${annotated}`);
+      throw new Error(`Expected to find a ${CLOSE} in ${annotated}`);
     }
 
-    const secondClose = annotated.indexOf('#~', close + 1);
+    const secondClose = annotated.indexOf(CLOSE, close + 1);
 
     if (secondClose !== -1) {
-      throw Error(`Expected only one #~ in ${annotated}`);
+      throw Error(`Expected only one ${CLOSE} in ${annotated}`);
     }
 
     const before = annotated.slice(0, open);
-    const after = annotated.slice(close + 2);
-    const at = annotated.slice(open + 2, close);
+    const after = annotated.slice(close + CLOSE.length);
+    const at = annotated.slice(open + OPEN.length, close);
 
     const source = `${before}${at}${after}`;
 
@@ -58,7 +61,7 @@ export class AnnotatedSource {
         )
       : template(source, 'test-module', { throwErrors: false });
 
-    const span = SourceSpan.forCharPositions(t, open, open + at.length);
+    const span = SourceSpan.offsets(t, open, open + at.length);
 
     return new AnnotatedSource(t, source, span);
   }

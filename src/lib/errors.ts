@@ -1,3 +1,58 @@
+import type * as ASTv1 from './v1/nodes-v1.js';
+
+export enum ParserState {
+  AttrName,
+  AttrValue,
+  TagName,
+  Unknown,
+}
+
+export function formatParserState(state: ParserState): string {
+  switch (state) {
+    case ParserState.AttrName:
+      return ' in an attribute name';
+    case ParserState.AttrValue:
+      return ' in an attribute value';
+    case ParserState.TagName:
+      return ' in a tag name';
+    case ParserState.Unknown:
+      return '';
+  }
+}
+
+const HBS_CONSTRUCTS = {
+  Partial: ['partial', 'partials'],
+  PartialBlock: ['partial-block', 'partial blocks'],
+  Decorator: ['decorator', 'decorators'],
+  DecoratorBlock: ['decorator-block', 'decorator blocks'],
+
+  Path: ['path', 'paths'],
+  StringLiteral: ['string literal', 'string literals'],
+  NumberLiteral: ['number literal', 'number literals'],
+  True: ['true literal', 'true literals'],
+  False: ['false literal', 'false literals'],
+  Undefined: ['undefined', 'undefined'],
+  Null: ['null', 'null'],
+} as const;
+
+export type HbsConstruct = keyof typeof HBS_CONSTRUCTS;
+
+export function formatHbsConstruct(
+  construct: HbsConstruct,
+  plurality: 'singular' | 'plural'
+): string {
+  if (plurality === 'plural') {
+    return HBS_CONSTRUCTS[construct][1];
+  } else {
+    return HBS_CONSTRUCTS[construct][0];
+  }
+}
+
+export interface HbsErrorOptions {
+  in: ParserState;
+  is: HbsConstruct;
+}
+
 export const SYNTAX_ERRORS = {
   'block-params.empty': `Empty block params are not allowed`,
   'block-params.unclosed': `Unclosed block parameters`,
@@ -32,6 +87,29 @@ export const SYNTAX_ERRORS = {
   'hbs.syntax.invalid-dotslash': 'Using "./" is not supported in Glimmer and unnecessary',
   'hbs.syntax.invalid-argument': `Invalid argument: Arguments must start with \`@\` followed by a-z`,
   'hbs.syntax.invalid-variable': `Invalid variable: Variables must start with a-z or A-Z`,
+  'hbs.syntax.unsupported-construct': (name: HbsConstruct) =>
+    `Handlebars ${formatHbsConstruct(name, 'plural')} are not supported`,
+  'hbs.syntax.not-callable': (literal: ASTv1.Literal) => {
+    switch (literal.type) {
+      case 'StringLiteral':
+        return `The string literal ${literal.original} is not callable`;
+      case 'BooleanLiteral':
+        return `The literal ${literal.original} is not callable`;
+      case 'NumberLiteral':
+        return `The number literal ${literal.original} is not callable`;
+      case 'NullLiteral':
+        return `The literal ${literal.original} is not callable`;
+      case 'UndefinedLiteral':
+        return `The literal ${literal.original} is not callable`;
+    }
+  },
+
+  'html.syntax.invalid-hbs-comment': (situation: ParserState) =>
+    `Invalid Handlebars comment${formatParserState(situation)}`,
+  'html.syntax.invalid-hbs-curly': (situation: ParserState) =>
+    `Invalid mustache${formatParserState(situation)}`,
+  'html.syntax.invalid-hbs-expression': (options: HbsErrorOptions) =>
+    `Invalid ${formatHbsConstruct(options.is, 'singular')}${formatParserState(options.in)}`,
 
   'passthrough.tokenizer': (error: string) => `HTML Error: ${error}`,
 } as const;
