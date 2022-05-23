@@ -12,6 +12,8 @@ export default function debugMode(): Plugin {
           return DEBUG_MODULE;
         case '@glimmer/local-debug-flags':
           return LOCAL_DEBUG_MODULE;
+        default:
+          return;
       }
     },
     load(id) {
@@ -20,6 +22,8 @@ export default function debugMode(): Plugin {
           return `export const DEBUG = true;`;
         case LOCAL_DEBUG_MODULE:
           return `export const LOCAL_DEBUG = true;`;
+        default:
+          return;
       }
     },
   };

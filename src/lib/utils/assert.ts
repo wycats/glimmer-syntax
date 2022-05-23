@@ -29,4 +29,4 @@ export function exhaustive(_value: never, reason?: string): never {
 export type Assert<T, U> = U extends T ? void : never;
 
 export function assertType<U>(_value: U): void {}
-export function assertTypes<T extends unknown[]>(...values: T): void {}
+export function assertTypes<T extends unknown[]>(..._values: T): void {}

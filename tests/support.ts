@@ -14,10 +14,10 @@ function normalizeNode(obj: NodeInput): NodeInput {
       }
     } else {
       newObj = {};
-      let keys = Object.keys(obj);
+      const keys = Object.keys(obj) as (keyof typeof obj)[];
       for (let i = 0; i < keys.length; i++) {
-        let key = keys[i];
-        if (key === 'loc') continue;
+        const key = keys[i];
+        if (key === 'loc' || key === 'type') continue;
         newObj[key] = normalizeNode(obj[key]);
       }
     }
@@ -66,12 +66,6 @@ export function astEqual(
   };
 
   expect(json(normalized.actual), message).toMatchObject(json(normalized.expected));
-
-  // QUnit.assert.deepEqual(
-  //   JSON.parse(JSON.stringify(actual)),
-  //   JSON.parse(JSON.stringify(expected)),
-  //   message
-  // );
 }
 
 function json(unknown: object): object {

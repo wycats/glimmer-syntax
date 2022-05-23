@@ -30,7 +30,7 @@ describe('AST plugins', () => {
     });
   });
 
-  test('plugins are provided the syntax package', (assert) => {
+  test('plugins are provided the syntax package', () => {
     expect.assertions(1);
 
     preprocess('<div></div>', {
@@ -46,7 +46,7 @@ describe('AST plugins', () => {
     });
   });
 
-  test('can support the legacy AST transform API via ASTPlugin', (assert) => {
+  test('can support the legacy AST transform API via ASTPlugin', () => {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     function ensurePlugin(FunctionOrPlugin: any): ASTPluginBuilder {
       if (FunctionOrPlugin.prototype && FunctionOrPlugin.prototype.transform) {
@@ -90,7 +90,7 @@ describe('AST plugins', () => {
   const SECOND_PLUGIN = new WeakMap<AST.Program | AST.Block | AST.Template, boolean>();
   const THIRD_PLUGIN = new WeakMap<AST.Program | AST.Block | AST.Template, boolean>();
 
-  test('AST plugins can be chained', (assert) => {
+  test('AST plugins can be chained', () => {
     expect.assertions(3);
 
     let first = () => {

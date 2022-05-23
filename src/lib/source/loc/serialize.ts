@@ -1,5 +1,5 @@
 import type { SourceLocation, SourcePosition } from '../../v1/handlebars-ast';
-import type { SourceTemplate } from '../source';
+import type { SourceSpan } from './source-span';
 
 export type SerializedConcreteSourceSpan =
   | /** collapsed */ number
@@ -33,16 +33,40 @@ export function serializeOffsets(
   }
 }
 
-export function deserializeLocation(
-  template: SourceTemplate,
-  location: SerializedLocation
-): SourceLocation {
+export function parse(
+  serialized: SerializedSourceSpan,
+  create: (
+    offsets:
+      | { type: 'synthetic'; chars: string }
+      | { type: 'valid'; start: number; end: number }
+      | { type: 'broken'; start: SourcePosition; end: SourcePosition }
+  ) => SourceSpan
+): SourceSpan {
+  if (typeof serialized === 'number') {
+    return create({ type: 'valid', start: serialized, end: serialized });
+  } else if (typeof serialized === 'string') {
+    return create({ type: 'synthetic', chars: serialized });
+  } else if (serialized[0] === 'broken') {
+    return create({ type: 'broken', ...parsePositions(serialized[1]) });
+  } else {
+    let [start, size] = serialized;
+    return create({
+      type: 'valid',
+      start,
+      end: start + size,
+    });
+  }
+}
+
+export function parsePositions(location: SerializedLocation): {
+  start: SourcePosition;
+  end: SourcePosition;
+} {
   const [start, end] = location.split('-');
   const [startLine, startColumn] = start.split(':');
   const [endLine, endColumn] = end.split(':');
 
   return {
-    source: template.module,
     start: {
       line: Number(startLine),
       column: Number(startColumn),

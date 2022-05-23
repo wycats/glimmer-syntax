@@ -65,18 +65,18 @@ describe('Code generation', () => {
   }
 
   for (const template of templates) {
-    test(`${template} is stable when printed`, (assert) => {
+    test(`${template} is stable when printed`, () => {
       expect(printTransform(template)).toBe(template);
     });
   }
 
-  test('TextNode: chars escape - but do not match', (assert) => {
+  test('TextNode: chars escape - but do not match', () => {
     expect(printTransform('&lt; &amp; &nbsp; &gt; &copy;2018')).toBe(
       '&lt; &amp; &nbsp; &gt; ©2018'
     );
   });
 
-  test('Handlebars comment', (assert) => {
+  test('Handlebars comment', () => {
     expect(printTransform('{{! foo }}')).toBe('{{!-- foo --}}');
   });
 });
@@ -117,7 +117,7 @@ describe('Code generation - source -> source', () => {
 });
 
 describe('Code generation - override', () => {
-  test('can provide a custom options.override to be used', (assert) => {
+  test('can provide a custom options.override to be used', () => {
     let ast = parse(`<FooBar @baz="qux" @derp="qux" />`);
 
     let actual = print(ast, {
@@ -135,7 +135,7 @@ describe('Code generation - override', () => {
     expect(actual).toBe(`<FooBar @baz="ZOMG!!!!" @derp="qux" />`);
   });
 
-  test('maintains proper spacing when overriding hash', (assert) => {
+  test('maintains proper spacing when overriding hash', () => {
     let ast = parse(`{{foo-bar blah=baz}}`);
 
     let actual = print(ast, {
@@ -153,7 +153,7 @@ describe('Code generation - override', () => {
     expect(actual).toBe(`{{foo-bar baz="ZOMG!!!!"}}`);
   });
 
-  test('maintains proper spacing when overriding empty hash', (assert) => {
+  test('maintains proper spacing when overriding empty hash', () => {
     let ast = parse(`{{foo-bar derp blah=baz}}`);
 
     let actual = print(ast, {

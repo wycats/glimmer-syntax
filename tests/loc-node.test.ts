@@ -126,7 +126,7 @@ describe('Parser - Location Info', () => {
     }
   });
 
-  test('html elements with nested blocks', (assert) => {
+  test('html elements with nested blocks', () => {
     let ast = parse(`
       <div>
         {{#if isSingleError}}

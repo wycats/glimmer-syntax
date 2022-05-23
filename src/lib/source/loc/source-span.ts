@@ -1,12 +1,11 @@
 import { DEBUG } from '@glimmer/env';
-import type { PresentArray } from '../../utils/array';
 import type { SourceLocation, SourcePosition } from '../../v1/handlebars-ast';
 import { UNKNOWN_POSITION } from '../index.js';
 import { SourceSlice } from '../slice';
 import type { SourceTemplate } from '../source';
 import { format, FormatSpan } from './format';
 import { BrokenPosition, SourceOffset } from './offset';
-import { serializeBroken, serializeOffsets, type SerializedSourceSpan } from './serialize';
+import { parse, serializeBroken, serializeOffsets, type SerializedSourceSpan } from './serialize';
 
 export interface SpanInterface {
   readonly module: string;
@@ -52,6 +51,25 @@ interface SpanData {
 export abstract class SourceSpan implements SpanInterface, SourceLocation {
   static from(data: SpanData): SourceSpan {
     return new ConcreteSpan(data);
+  }
+
+  static load(template: SourceTemplate, data: SerializedSourceSpan): SourceSpan {
+    return parse(data, (parsed) => {
+      switch (parsed.type) {
+        case 'valid': {
+          return SourceSpan.offsets(template, parsed.start, parsed.end);
+        }
+        case 'broken': {
+          return SourceSpan.loc(template, {
+            source: template.module,
+            start: parsed.start,
+            end: parsed.end,
+          });
+        }
+        case 'synthetic':
+          return SourceSpan.synthetic(template, parsed.chars);
+      }
+    });
   }
 
   static offsets(template: SourceTemplate, start: number, end: number): SourceSpan {
@@ -510,90 +528,5 @@ export class SyntheticSpan extends SourceSpan {
 
   asAnnotatedString(): string {
     return format(this.#string);
-  }
-}
-
-/**
- * A MultiSpan has at least one synthetic span and at least one concrete span.
- */
-export class MultiSpan extends SourceSpan {
-  static create(template: SourceTemplate, spans: PresentArray<SourceSpan>) {
-    const concrete = spans.filter((span) => span instanceof ConcreteSpan);
-
-    // If all of the spans are synthetic, just make a single synthetic span
-    if (concrete.length === 0) {
-      return new SyntheticSpan(template, spans.map((span) => span.asString()).join(''));
-    }
-
-    // If all of the spans are concrete, just make a single concrete span
-    if (concrete.length === spans.length) {
-      return SourceSpan.from({
-        template,
-        offsets: {
-          start: spans[0].getStart(),
-          end: spans[spans.length - 1].getEnd(),
-        },
-      });
-    }
-
-    return new MultiSpan(
-      template,
-      {
-        start: concrete[0].getStart(),
-        end: concrete[concrete.length - 1].getEnd(),
-      },
-      spans,
-      concrete as PresentArray<ConcreteSpan>
-    );
-  }
-
-  #spans: SourceSpan[];
-  #concrete: PresentArray<ConcreteSpan>;
-
-  constructor(
-    template: SourceTemplate,
-    offsets: { start: SourceOffset; end: SourceOffset },
-    spans: SourceSpan[],
-    concrete: PresentArray<ConcreteSpan>
-  ) {
-    super({ template, offsets });
-    this.#spans = spans;
-    this.#concrete = concrete;
-  }
-
-  serialize(): SerializedSourceSpan {
-    return this.#spans.map((span) => span.asString()).join('');
-  }
-
-  extend(other: SourceSpan): SourceSpan {
-    return SourceSpan.from({
-      template: this.getTemplate(),
-      offsets: {
-        start: this.getStart(),
-        end: other.getEnd(),
-      },
-    });
-  }
-
-  verify(): boolean {
-    return this.#spans.every((span) => span.verify());
-  }
-
-  withStart(_start: SourceOffset | BrokenPosition): SourceSpan {
-    console.warn('withStart is not supported on MultiSpan (FIXME: warning)');
-    return this;
-  }
-
-  withEnd(_end: SourceOffset | BrokenPosition): SourceSpan {
-    console.warn('withEnd is not supported on MultiSpan (FIXME: warning)');
-    return this;
-  }
-
-  asString(): string {
-    return this.#spans.map((span) => span.asString()).join('');
-  }
-
-  asAnnotatedString(): string {
-    return format(this.asString());
   }
 }
