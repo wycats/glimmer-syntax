@@ -27,9 +27,11 @@ function normalizeNode(obj: NodeInput): NodeInput {
   }
 }
 
+export type ExpectedAST = NodeInput | string;
+
 export function astEqual(
-  actual: NodeInput | string | null | undefined,
-  expected: NodeInput | string | null | undefined,
+  actual: ExpectedAST | null | undefined,
+  expected: ExpectedAST | null | undefined,
   message?: string,
   parseOptions?: PreprocessOptions
 ) {

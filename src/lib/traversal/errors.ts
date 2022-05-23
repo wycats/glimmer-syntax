@@ -17,6 +17,7 @@ export function cannotRemoveNode(
   parent: ASTv1.Node,
   key: string
 ): TraversalError {
+  debugger;
   return new TraversalError(
     'Cannot remove a node unless it is part of an array',
     node,

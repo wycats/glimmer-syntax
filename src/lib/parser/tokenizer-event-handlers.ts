@@ -86,15 +86,17 @@ function printTrace(trace: TraceEntry[]) {
 }
 
 function printStates(stack: Stack<TokenizerState>) {
-  console.group('STATE STACK');
-  console.log(
-    JSON.stringify(
-      stack.toArray().map((s) => s.type),
-      null,
-      2
-    )
-  );
-  console.groupEnd();
+  if (LOCAL_DEBUG) {
+    console.group('STATE STACK');
+    console.log(
+      JSON.stringify(
+        stack.toArray().map((s) => s.type),
+        null,
+        2
+      )
+    );
+    console.groupEnd();
+  }
 }
 export class TokenizerEventHandlers extends HandlebarsNodeVisitors {
   private tagOpenLine = 0;

@@ -286,7 +286,6 @@ export class Phase1Builder {
     } else if (head === 'this') {
       return this.this(loc);
     } else {
-      console.log({ head });
       return this.var(head, loc);
     }
   }

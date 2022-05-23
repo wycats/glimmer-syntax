@@ -16,7 +16,6 @@ const b = Buildersv1.forModule('', 'test-module');
 
 function syntaxError(source: string, error: SymbolicSyntaxError) {
   const annotated = AnnotatedSource.from(source);
-  console.log({ source: annotated.source });
   const result = preprocess.normalized(annotated.source, annotated.options);
 
   expect(result.errors, 'Expected syntax errors').toBeTruthy();

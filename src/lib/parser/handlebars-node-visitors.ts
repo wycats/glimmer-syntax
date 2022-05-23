@@ -213,7 +213,6 @@ export abstract class HandlebarsNodeVisitors extends Parser {
         appendChild(this.currentElement(), mustache);
     }
 
-    console.log({ mustache });
     return mustache;
   }
 

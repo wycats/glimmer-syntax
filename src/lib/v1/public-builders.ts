@@ -143,7 +143,6 @@ function mustacheOptions(
   options: MustacheOptions,
   template: SourceTemplate
 ): ASTv1.MustacheStatementParts {
-  console.log(options);
   const call = callOptions(path, scope, options, template);
 
   return {
@@ -173,12 +172,9 @@ function blockOptions(
   const parts = {
     ...callOptions(path, scope, options, template),
     program: toBlock(options.blocks.default),
+    inverse: options.blocks.else ? toBlock(options.blocks.else) : null,
     ...toAllStripFlags(options?.strip),
   };
-
-  if (options.blocks.else) {
-    (parts as Partial<ASTv1.BlockStatementParts>).inverse = toBlock(options.blocks.else);
-  }
 
   return parts;
 }
@@ -272,8 +268,6 @@ export class PublicBuilders {
         return params;
       }
     };
-
-    console.log(normalize());
 
     return {
       type: 'MustacheStatement',
