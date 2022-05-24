@@ -1,7 +1,6 @@
 /* eslint-disable no-console */
 import type { TokenizerDelegate } from 'simple-html-tokenizer';
 
-import { GlimmerSyntaxError } from '../syntax-error';
 import { getBlockParams } from '../utils';
 import type { Parser, Tag } from './parser';
 
@@ -101,12 +100,10 @@ export class TokenizerEventHandlers implements TokenizerDelegate {
     if (tag.type === 'StartTag') {
       if (tag.name === ':') {
         const offset = this.#parser.offset();
-        this.#parser.reportError(
-          GlimmerSyntaxError.from(
-            'html.syntax.invalid-named-block',
-            this.#b.span({ start: offset.move(-1), end: offset })
-          )
-        );
+        this.#parser.error('html.syntax.invalid-named-block', {
+          start: offset.move(-1),
+          end: offset,
+        });
       } else {
         this.#finishStartTag(tag);
       }

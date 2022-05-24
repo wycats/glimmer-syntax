@@ -2,11 +2,13 @@ import { LOCAL_DEBUG } from '@glimmer/local-debug-flags';
 import type { EventedTokenizer } from 'simple-html-tokenizer';
 import type { TokenizerState as UpstreamTokenizerState } from 'simple-html-tokenizer';
 
+import type { SyntaxErrorArgs } from '../errors';
+import { SymbolicSyntaxError } from '../errors';
 import { voidMap } from '../generation/printer';
 import type { SourceOffset } from '../source/loc/offset';
 import type { SourceSpan } from '../source/loc/source-span';
 import type { SourceTemplate } from '../source/source';
-import { GlimmerSyntaxError } from '../syntax-error.js';
+import type { GlimmerSyntaxError } from '../syntax-error.js';
 import { appendChild } from '../utils';
 import { isPresent } from '../utils/array.js';
 import { assert } from '../utils/assert.js';
@@ -14,7 +16,7 @@ import { type Optional, existing } from '../utils/exists.js';
 import { Stack } from '../utils/stack.js';
 import type * as ASTv1 from '../v1/api';
 import type * as HBS from '../v1/handlebars-ast';
-import { Phase1Builder } from '../v1/parser-builders';
+import { type ToBuilderSpan, Phase1Builder } from '../v1/parser-builders';
 import type { HandlebarsNodeVisitors } from './handlebars-node-visitors';
 import { Scope } from './scope';
 import {
@@ -195,7 +197,7 @@ class ConstructingAttributeValue {
     const tag = this.#attribute.finish(this.#assemble(span));
 
     if (tag.type === 'EndTag') {
-      this.#parser.reportError(GlimmerSyntaxError.from('elements.invalid-attrs-in-end-tag', span));
+      this.#parser.error('elements.invalid-attrs-in-end-tag', span);
     }
 
     return tag;
@@ -399,6 +401,28 @@ export class Parser {
     this.#errors.push(error);
   }
 
+  error(error: Extract<SyntaxErrorArgs, string>, span: ToBuilderSpan): GlimmerSyntaxError;
+  error<K extends Extract<SyntaxErrorArgs, unknown[]>[0]>(
+    name: K,
+    arg: Extract<SyntaxErrorArgs, [K, any]>[1],
+    span: ToBuilderSpan
+  ): GlimmerSyntaxError;
+  error(error: string, args: unknown | ToBuilderSpan, span?: ToBuilderSpan): GlimmerSyntaxError {
+    if (span === undefined) {
+      const err = new SymbolicSyntaxError(error as SyntaxErrorArgs).spanned(
+        this.builder.span(args as HBS.SourceLocation | SourceSpan)
+      );
+      this.reportError(err);
+      return err;
+    } else {
+      const err = new SymbolicSyntaxError([error, args] as SyntaxErrorArgs).spanned(
+        this.builder.span(span)
+      );
+      this.reportError(err);
+      return err;
+    }
+  }
+
   /**
    * For now, pass through most tokenizer errors. Ultimately, we should convert
    * these errors into `GlimmerSyntaxError`s. At the moment, we ignore errors in
@@ -409,9 +433,7 @@ export class Parser {
     if (this.#constructing?.type === 'Attribute') {
       return;
     } else {
-      this.reportError(
-        GlimmerSyntaxError.from(['passthrough.tokenizer', message], this.offset().collapsed())
-      );
+      this.error('passthrough.tokenizer', message, this.offset().collapsed());
     }
   }
 
@@ -426,9 +448,7 @@ export class Parser {
 
   startAttr() {
     if (this.#constructing?.type === 'EndTag') {
-      this.reportError(
-        GlimmerSyntaxError.from('elements.invalid-attrs-in-end-tag', this.offset().collapsed())
-      );
+      this.error('elements.invalid-attrs-in-end-tag', this.offset().collapsed());
     }
 
     const tag = this.#verifyConstructing('StartTag', 'EndTag');
@@ -588,22 +608,13 @@ export class Parser {
       // EngTag is also called by StartTag for void and self-closing tags (i.e.
       // <input> or <br />, so we need to check for that here. Otherwise, we would
       // throw an error for those cases.
-      this.reportError(
-        GlimmerSyntaxError.from(['elements.unnecessary-end-tag', tag.name], tag.loc)
-      );
+      this.error('elements.unnecessary-end-tag', tag.name, tag.loc);
       return false;
     } else if (element.type !== 'ElementNode' || element.tag === undefined) {
-      this.reportError(
-        GlimmerSyntaxError.from(['elements.end-without-start-tag', tag.name], tag.loc)
-      );
+      this.error('elements.end-without-start-tag', tag.name, tag.loc);
       return false;
     } else if (element.tag !== tag.name) {
-      this.reportError(
-        GlimmerSyntaxError.from(
-          ['elements.unbalanced-tags', { open: element.tag, close: tag.name }],
-          tag.loc
-        )
-      );
+      this.error('elements.unbalanced-tags', { open: element.tag, close: tag.name }, tag.loc);
       return false;
     } else {
       return true;

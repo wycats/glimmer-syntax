@@ -1,17 +1,24 @@
-import { SYNTAX_ERRORS, type VoidSyntaxErrorName } from './errors';
+import { type SyntaxErrorArgs, SymbolicSyntaxError } from './errors';
 import type { SourceSpan } from './source/loc/source-span.js';
-
-export type SymbolicSyntaxError =
-  | VoidSyntaxErrorName
-  | {
-      [P in keyof SYNTAX_ERRORS]: SYNTAX_ERRORS[P] extends (arg: infer Arg) => string
-        ? [P, Arg]
-        : never;
-    }[keyof SYNTAX_ERRORS];
+import type { ToBuilderSpan } from './v1/parser-builders';
 
 export class GlimmerSyntaxError extends SyntaxError {
-  static from(error: SymbolicSyntaxError, span: SourceSpan): GlimmerSyntaxError {
-    return new GlimmerSyntaxError(symbolicMessage(error), span);
+  static from(error: Extract<SyntaxErrorArgs, string>, span: ToBuilderSpan): GlimmerSyntaxError;
+  static from<K extends Extract<SyntaxErrorArgs, unknown[]>[0]>(
+    name: K,
+    arg: Extract<SyntaxErrorArgs, [K, any]>[1],
+    span: SourceSpan
+  ): GlimmerSyntaxError;
+  static from(error: string, args: unknown | ToBuilderSpan, span?: SourceSpan): GlimmerSyntaxError {
+    if (span === undefined) {
+      return SymbolicSyntaxError.create(error as SyntaxErrorArgs).spanned(args as SourceSpan);
+    } else {
+      return SymbolicSyntaxError.create([error, args] as SyntaxErrorArgs).spanned(span);
+    }
+  }
+
+  static create(args: SyntaxErrorArgs, span: SourceSpan): GlimmerSyntaxError {
+    return SymbolicSyntaxError.create(args).spanned(span);
   }
 
   readonly code: string;
@@ -26,15 +33,4 @@ export class GlimmerSyntaxError extends SyntaxError {
 
 export function generateSyntaxError(message: string, location: SourceSpan): GlimmerSyntaxError {
   return new GlimmerSyntaxError(message, location);
-}
-
-export function symbolicMessage(error: SymbolicSyntaxError | string): string {
-  if (Array.isArray(error)) {
-    // @ts-expect-error FIXME
-    return SYNTAX_ERRORS[error[0]](error[1]);
-  } else if (error in SYNTAX_ERRORS) {
-    return SYNTAX_ERRORS[error as VoidSyntaxErrorName];
-  } else {
-    return error;
-  }
 }

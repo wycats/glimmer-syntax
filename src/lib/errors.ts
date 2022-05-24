@@ -1,3 +1,7 @@
+import type { SourceSpan } from './source/loc/source-span';
+import { GlimmerSyntaxError } from './syntax-error';
+import type * as HBS from './v1/handlebars-ast';
+
 export enum ParserState {
   AttrName,
   AttrValue,
@@ -53,6 +57,52 @@ export interface HbsErrorOptions {
   is: HbsConstruct;
 }
 
+type SyntaxErrorFor<K extends keyof SYNTAX_ERRORS> = {
+  [P in K]: SYNTAX_ERRORS[P] extends (arg: infer Arg) => string ? [P, Arg] : P;
+}[K];
+
+export type SyntaxErrorArgs = SyntaxErrorFor<keyof SYNTAX_ERRORS>;
+
+export class SymbolicSyntaxError {
+  static of(error: Extract<SyntaxErrorArgs, string>): SymbolicSyntaxError;
+  static of<K extends Extract<SyntaxErrorArgs, unknown[]>[0]>(
+    name: K,
+    arg: Extract<SyntaxErrorArgs, [K, any]>[1]
+  ): SymbolicSyntaxError;
+  static of(error: string, args?: unknown): SymbolicSyntaxError {
+    if (args === undefined) {
+      return new SymbolicSyntaxError(error as SyntaxErrorArgs);
+    } else {
+      return new SymbolicSyntaxError([error, args] as SyntaxErrorArgs);
+    }
+  }
+
+  static create(args: SyntaxErrorArgs): SymbolicSyntaxError {
+    return new SymbolicSyntaxError(args);
+  }
+
+  #error: SyntaxErrorArgs;
+
+  constructor(error: SyntaxErrorArgs) {
+    this.#error = error;
+  }
+
+  spanned(span: SourceSpan): GlimmerSyntaxError {
+    return new GlimmerSyntaxError(this.#message, span);
+  }
+
+  get #message() {
+    const error = this.#error;
+
+    if (typeof error === 'string') {
+      return SYNTAX_ERRORS[error];
+    } else {
+      const [key, arg] = error;
+      return SYNTAX_ERRORS[key](arg as never);
+    }
+  }
+}
+
 export const SYNTAX_ERRORS = {
   'block-params.empty': `Empty block params are not allowed`,
   'block-params.unclosed': `Unclosed block parameters`,
@@ -90,23 +140,7 @@ export const SYNTAX_ERRORS = {
   'hbs.syntax.invalid-block': `A block may only be used inside an HTML element or another block`,
   'hbs.syntax.unsupported-construct': (name: HbsConstruct) =>
     `Handlebars ${formatHbsConstruct(name, 'plural')} are not supported`,
-  'hbs.syntax.not-callable': (literal: {
-    type: 'StringLiteral' | 'BooleanLiteral' | 'NumberLiteral' | 'NullLiteral' | 'UndefinedLiteral';
-    original?: string | number | boolean;
-  }) => {
-    switch (literal.type) {
-      case 'StringLiteral':
-        return `The string literal ${JSON.stringify(literal.original)} is not callable`;
-      case 'BooleanLiteral':
-        return `The literal ${literal.original} is not callable`;
-      case 'NumberLiteral':
-        return `The number literal ${literal.original} is not callable`;
-      case 'NullLiteral':
-        return `The literal null is not callable`;
-      case 'UndefinedLiteral':
-        return `The literal undefined is not callable`;
-    }
-  },
+  'hbs.syntax.not-callable': uncallableLiteral,
 
   'html.syntax.invalid-hbs-comment': (situation: ParserState) =>
     `Invalid Handlebars comment${formatParserState(situation)}`,
@@ -122,20 +156,30 @@ export const SYNTAX_ERRORS = {
 } as const;
 export type SYNTAX_ERRORS = typeof SYNTAX_ERRORS;
 
-export type VoidSyntaxErrors = {
-  [P in keyof SYNTAX_ERRORS]: SYNTAX_ERRORS[P] extends string ? SYNTAX_ERRORS[P] : never;
-};
+type UncallableLiteral =
+  | {
+      type: 'string' | 'boolean' | 'number';
+      original: string | number | boolean;
+    }
+  | { type: 'undefined' | 'null' };
 
-export type VoidSyntaxErrorName = {
-  [P in keyof VoidSyntaxErrors]: VoidSyntaxErrors[P] extends never ? never : P;
-}[keyof VoidSyntaxErrors];
-
-export type ParameterizedSyntaxErrors = {
-  [P in keyof SYNTAX_ERRORS]: SYNTAX_ERRORS[P] extends <T>(arg: T) => string
-    ? SYNTAX_ERRORS[P]
-    : never;
-};
-
-export type SyntaxErrorName<V> = {
-  [P in keyof SYNTAX_ERRORS]: SYNTAX_ERRORS[P] extends V ? P : never;
-}[keyof SYNTAX_ERRORS];
+function uncallableLiteral(literal: HBS.Literal | UncallableLiteral): string {
+  if ('value' in literal) {
+    switch (literal.type) {
+      case 'StringLiteral':
+        return uncallableLiteral({ type: 'string', original: literal.original });
+      case 'BooleanLiteral':
+        return uncallableLiteral({ type: 'boolean', original: literal.original });
+      case 'NumberLiteral':
+        return uncallableLiteral({ type: 'number', original: literal.original });
+      case 'UndefinedLiteral':
+        return uncallableLiteral({ type: 'undefined' });
+      case 'NullLiteral':
+        return uncallableLiteral({ type: 'null' });
+    }
+  } else if ('original' in literal) {
+    return `The ${literal.type} literal ${JSON.stringify(literal.original)} is not callable`;
+  } else {
+    return `The literal ${literal.type} is not callable`;
+  }
+}

@@ -1,7 +1,7 @@
 import type { TokenizerState } from 'simple-html-tokenizer';
 
-import { type HbsConstruct, type HbsErrorOptions, ParserState } from '../errors.js';
-import { type SymbolicSyntaxError, generateSyntaxError, GlimmerSyntaxError } from '../syntax-error';
+import { type HbsConstruct, ParserState, SymbolicSyntaxError } from '../errors.js';
+import { GlimmerSyntaxError } from '../syntax-error';
 import { isHBSLiteral, printLiteral } from '../utils';
 import { assert, exhaustive } from '../utils/assert';
 import type { Optional } from '../utils/exists.js';
@@ -90,8 +90,7 @@ export class HandlebarsNodeVisitors implements HandlebarsCallbacks {
         `The only possible kind of unclosed parent is ElementNode, but somehow got ${parent.type}`
       );
       this.#parser.reportError(
-        GlimmerSyntaxError.from(
-          ['elements.unclosed-element', parent.tag],
+        SymbolicSyntaxError.of('elements.unclosed-element', parent.tag).spanned(
           parent.loc.sliceStartChars({
             skipStart: 1,
             chars: parent.tag.length,
@@ -116,9 +115,7 @@ export class HandlebarsNodeVisitors implements HandlebarsCallbacks {
       case 'top-level':
         break;
       default:
-        this.#parser.reportError(
-          GlimmerSyntaxError.from('hbs.syntax.invalid-block', this.#b.span(block.loc))
-        );
+        this.#parser.error('hbs.syntax.invalid-block', block.loc);
     }
 
     const result = this.#acceptCallNodes(this, block);
@@ -307,12 +304,7 @@ export class HandlebarsNodeVisitors implements HandlebarsCallbacks {
       }
 
       case 'attribute:name:in': {
-        this.#parser.reportError(
-          GlimmerSyntaxError.from(
-            ['html.syntax.invalid-hbs-comment', ParserState.AttrName],
-            this.#b.span(rawComment.loc)
-          )
-        );
+        this.#parser.error('html.syntax.invalid-hbs-comment', ParserState.AttrName, rawComment.loc);
         return comment;
       }
 
@@ -320,21 +312,23 @@ export class HandlebarsNodeVisitors implements HandlebarsCallbacks {
       case 'attribute:value:double-quoted':
       case 'attribute:value:unquoted':
       case 'attribute:value:before': {
-        const error = GlimmerSyntaxError.from(
-          ['html.syntax.invalid-hbs-comment', ParserState.AttrValue],
-          this.#b.span(rawComment.loc)
+        return ErrorStatement(
+          this.#parser.error(
+            'html.syntax.invalid-hbs-comment',
+            ParserState.AttrValue,
+            rawComment.loc
+          )
         );
-        this.#parser.reportError(error);
-        return ErrorStatement(error);
       }
 
       default: {
-        const error = GlimmerSyntaxError.from(
-          ['html.syntax.invalid-hbs-comment', ParserState.AttrValue],
-          this.#b.span(rawComment.loc)
+        return ErrorStatement(
+          this.#parser.error(
+            'html.syntax.invalid-hbs-comment',
+            ParserState.AttrValue,
+            rawComment.loc
+          )
         );
-        this.#parser.reportError(error);
-        return ErrorStatement(error);
       }
     }
   }
@@ -361,48 +355,12 @@ export class HandlebarsNodeVisitors implements HandlebarsCallbacks {
     exhaustive(error);
   }
 
-  #invalidExpr(
-    options: HbsErrorOptions | SymbolicSyntaxError,
-    loc: HBS.SourceLocation
-  ): HBS.ErrorExpression;
-  #invalidExpr(options: GlimmerSyntaxError): HBS.ErrorExpression;
-  #invalidExpr(
-    options: HbsErrorOptions | SymbolicSyntaxError | GlimmerSyntaxError,
-    loc?: HBS.SourceLocation
-  ): HBS.ErrorExpression {
-    if (options instanceof GlimmerSyntaxError) {
-      this.#parser.reportError(options);
-      return ErrorExpression(options);
-    } else if (typeof options === 'string' || Array.isArray(options)) {
-      const error = GlimmerSyntaxError.from(options, this.#b.span(loc as HBS.SourceLocation));
-      this.#parser.reportError(error);
-      return ErrorExpression(error);
-    } else {
-      const error = GlimmerSyntaxError.from(
-        ['html.syntax.invalid-hbs-expression', options],
-        this.#b.span(loc as HBS.SourceLocation)
-      );
-      this.#parser.reportError(error);
-      return ErrorExpression(error);
-    }
-  }
-
   #invalidCurly(state: ParserState, loc: HBS.SourceLocation): HBS.ErrorStatement {
-    const error = GlimmerSyntaxError.from(
-      ['html.syntax.invalid-hbs-curly', state],
-      this.#b.span(loc)
-    );
-    this.#parser.reportError(error);
-    return ErrorStatement(error);
+    return ErrorStatement(this.#parser.error('html.syntax.invalid-hbs-curly', state, loc));
   }
 
   #invalidHbsConstruct(construct: HbsConstruct, loc: HBS.SourceLocation): HBS.ErrorStatement {
-    const error = GlimmerSyntaxError.from(
-      ['hbs.syntax.unsupported-construct', construct],
-      this.#b.span(loc)
-    );
-    this.#parser.reportError(error);
-    return ErrorStatement(error);
+    return ErrorStatement(this.#parser.error('hbs.syntax.unsupported-construct', construct, loc));
   }
 
   PartialStatement(partial: HBS.PartialStatement): HBS.ErrorStatement {
@@ -425,7 +383,7 @@ export class HandlebarsNodeVisitors implements HandlebarsCallbacks {
     const result = this.#acceptCallNodes(this, sexpr);
 
     if (result.type === 'err') {
-      return this.#invalidExpr(result.error);
+      return ErrorExpression(result.error);
     }
 
     const { path, params, hash } = result.value;
@@ -444,17 +402,17 @@ export class HandlebarsNodeVisitors implements HandlebarsCallbacks {
 
     if (original.indexOf('/') !== -1) {
       if (original.slice(0, 2) === './') {
-        return this.#invalidExpr('hbs.syntax.invalid-dotslash', path.loc);
+        return ErrorExpression(this.#parser.error('hbs.syntax.invalid-dotslash', path.loc));
       }
       if (original.slice(0, 3) === '../') {
-        return this.#invalidExpr('hbs.syntax.invalid-dotdot', path.loc);
+        return ErrorExpression(this.#parser.error('hbs.syntax.invalid-dotdot', path.loc));
       }
       if (original.indexOf('.') !== -1) {
-        return this.#invalidExpr('hbs.syntax.invalid-slash', path.loc);
+        return ErrorExpression(this.#parser.error('hbs.syntax.invalid-slash', path.loc));
       }
       parts = [path.parts.join('/')];
     } else if (original === '.') {
-      return this.#invalidExpr('hbs.syntax.invalid-dot', path.loc);
+      return ErrorExpression(this.#parser.error('hbs.syntax.invalid-dot', path.loc));
     } else {
       parts = path.parts;
     }
@@ -509,9 +467,7 @@ export class HandlebarsNodeVisitors implements HandlebarsCallbacks {
       let head = parts.shift();
 
       if (head === undefined) {
-        this.#parser.reportError(
-          GlimmerSyntaxError.from('hbs.syntax.invalid-variable', this.#b.span(path.loc))
-        );
+        this.#parser.error('hbs.syntax.invalid-variable', path.loc);
         head = '';
       }
 
@@ -612,10 +568,7 @@ export class HandlebarsNodeVisitors implements HandlebarsCallbacks {
       node.path;
       return {
         type: 'err',
-        error: GlimmerSyntaxError.from(
-          ['hbs.syntax.not-callable', node.path],
-          this.#b.span(node.path.loc)
-        ),
+        error: this.#parser.error('hbs.syntax.not-callable', node.path, node.path.loc),
       };
     }
 

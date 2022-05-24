@@ -1,8 +1,7 @@
-import { GlimmerSyntaxError } from '@glimmer/syntax';
+import { type SyntaxErrorArgs, GlimmerSyntaxError } from '@glimmer/syntax';
 import {
   type ASTv1,
   type Dict,
-  type SymbolicSyntaxError,
   Buildersv1,
   ParserState,
   preprocess as parse,
@@ -16,7 +15,13 @@ import { AnnotatedSource } from './support/annotated.js';
 
 const b = Buildersv1.forModule('', 'test-module');
 
-function syntaxError(source: string, error: SymbolicSyntaxError) {
+function syntaxError(source: string, error: Extract<SyntaxErrorArgs, string>): void;
+function syntaxError<K extends Extract<SyntaxErrorArgs, unknown[]>[0]>(
+  source: string,
+  name: K,
+  arg: Extract<SyntaxErrorArgs, [K, any]>[1]
+): void;
+function syntaxError(source: string, error: string, args?: unknown) {
   const annotated = AnnotatedSource.from(source);
   const result = preprocess.normalized(annotated.source, annotated.options);
 
@@ -28,7 +33,13 @@ function syntaxError(source: string, error: SymbolicSyntaxError) {
   );
 
   const actualError: GlimmerSyntaxError = (result.errors as [GlimmerSyntaxError])[0];
-  const expectedError = GlimmerSyntaxError.from(error, annotated.span);
+
+  let expectedError: GlimmerSyntaxError;
+  if (args === undefined) {
+    expectedError = GlimmerSyntaxError.create(error as SyntaxErrorArgs, annotated.span);
+  } else {
+    expectedError = GlimmerSyntaxError.create([error, args] as SyntaxErrorArgs, annotated.span);
+  }
 
   expect(actualError.message, 'error message').toEqual(expectedError.message);
 }
@@ -58,10 +69,11 @@ describe('Parser - AST', () => {
   });
 
   test('disallowed equals sign in element space is rejected', () => {
-    syntaxError('<img |-><-|=foo >', [
+    syntaxError(
+      '<img |-><-|=foo >',
       'passthrough.tokenizer',
-      `attribute name cannot start with equals sign`,
-    ]);
+      `attribute name cannot start with equals sign`
+    );
   });
 
   test('svg content', () => {
@@ -581,25 +593,29 @@ describe('Parser - AST', () => {
   });
 
   test('a Handlebars comment in invalid element space', () => {
-    syntaxError(`\nbefore <div \n  a|->{{! some comment }}<-| data-foo="bar"></div> after`, [
+    syntaxError(
+      `\nbefore <div \n  a|->{{! some comment }}<-| data-foo="bar"></div> after`,
       'html.syntax.invalid-hbs-comment',
-      ParserState.AttrName,
-    ]);
+      ParserState.AttrName
+    );
 
-    syntaxError(`\nbefore <div \n  a=|->{{! some comment }}<-| data-foo="bar"></div> after`, [
+    syntaxError(
+      `\nbefore <div \n  a=|->{{! some comment }}<-| data-foo="bar"></div> after`,
       'html.syntax.invalid-hbs-comment',
-      ParserState.AttrValue,
-    ]);
+      ParserState.AttrValue
+    );
 
-    syntaxError(`\nbefore <div \n  a=|->{{! some comment }}<-| data-foo="bar"></div> after`, [
+    syntaxError(
+      `\nbefore <div \n  a=|->{{! some comment }}<-| data-foo="bar"></div> after`,
       'html.syntax.invalid-hbs-comment',
-      ParserState.AttrValue,
-    ]);
+      ParserState.AttrValue
+    );
 
-    syntaxError(`\nbefore <div \n  a="|->{{! some comment }}<-|" data-foo="bar"></div> after`, [
+    syntaxError(
+      `\nbefore <div \n  a="|->{{! some comment }}<-|" data-foo="bar"></div> after`,
       'html.syntax.invalid-hbs-comment',
-      ParserState.AttrValue,
-    ]);
+      ParserState.AttrValue
+    );
   });
 
   test('allow {{null}} to be passed as helper name', () => {
@@ -627,27 +643,28 @@ describe('Parser - AST', () => {
   });
 
   test('Handlebars partial should error', () => {
-    syntaxError(`|->{{> foo}}<-|`, ['hbs.syntax.unsupported-construct', 'Partial']);
+    syntaxError(`|->{{> foo}}<-|`, 'hbs.syntax.unsupported-construct', 'Partial');
   });
 
   test('Handlebars partial block should error', () => {
-    syntaxError(`|->{{#> foo}}{{/foo}}<-|`, ['hbs.syntax.unsupported-construct', 'PartialBlock']);
+    syntaxError(`|->{{#> foo}}{{/foo}}<-|`, 'hbs.syntax.unsupported-construct', 'PartialBlock');
   });
 
   test('Handlebars decorator should error', () => {
-    syntaxError(`|->{{* foo}}<-|`, ['hbs.syntax.unsupported-construct', 'Decorator']);
+    syntaxError(`|->{{* foo}}<-|`, 'hbs.syntax.unsupported-construct', 'Decorator');
   });
 
   test('Handlebars decorator block should error', () => {
-    syntaxError(`|->{{#* foo}}{{/foo}}<-|`, ['hbs.syntax.unsupported-construct', 'DecoratorBlock']);
+    syntaxError(`|->{{#* foo}}{{/foo}}<-|`, 'hbs.syntax.unsupported-construct', 'DecoratorBlock');
   });
 
   test('disallowed mustaches in the tagName space', () => {
-    syntaxError(`<|->{{"asdf"}}<-|></{{"asdf"}}>`, [
+    syntaxError(
+      `<|->{{"asdf"}}<-|></{{"asdf"}}>`,
       'html.syntax.invalid-hbs-curly',
-      ParserState.TagName,
-    ]);
-    syntaxError(`<input|->{{bar}}<-|>`, ['html.syntax.invalid-hbs-curly', ParserState.TagName]);
+      ParserState.TagName
+    );
+    syntaxError(`<input|->{{bar}}<-|>`, 'html.syntax.invalid-hbs-curly', ParserState.TagName);
   });
 
   test('mustache immediately followed by self closing tag does not error', () => {
@@ -686,32 +703,26 @@ describe('Parser - AST', () => {
   });
 
   test('string literal as path throws error', () => {
-    syntaxError(`{{(|->"foo-baz"<-|)}}`, [
-      'hbs.syntax.not-callable',
-      { type: 'StringLiteral', original: `foo-baz` },
-    ]);
+    syntaxError(`{{(|->"foo-baz"<-|)}}`, 'hbs.syntax.not-callable', {
+      type: 'string',
+      original: `foo-baz`,
+    });
   });
 
   test('boolean literal as path throws error', () => {
-    syntaxError(`{{(|->true<-|)}}`, [
-      'hbs.syntax.not-callable',
-      { type: 'BooleanLiteral', original: true },
-    ]);
+    syntaxError(`{{(|->true<-|)}}`, 'hbs.syntax.not-callable', { type: 'boolean', original: true });
   });
 
   test('undefined literal as path throws error', () => {
-    syntaxError(`{{(|->undefined<-|)}}`, ['hbs.syntax.not-callable', { type: 'UndefinedLiteral' }]);
+    syntaxError(`{{(|->undefined<-|)}}`, 'hbs.syntax.not-callable', { type: 'undefined' });
   });
 
   test('null literal as path throws error', () => {
-    syntaxError(`{{(|->null<-|)}}`, ['hbs.syntax.not-callable', { type: 'NullLiteral' }]);
+    syntaxError(`{{(|->null<-|)}}`, 'hbs.syntax.not-callable', { type: 'null' });
   });
 
   test('number literal as path throws error', () => {
-    syntaxError(`{{(|->42<-|)}}`, [
-      'hbs.syntax.not-callable',
-      { type: 'NumberLiteral', original: 42 },
-    ]);
+    syntaxError(`{{(|->42<-|)}}`, 'hbs.syntax.not-callable', { type: 'number', original: 42 });
   });
 });
 

@@ -8,21 +8,22 @@ import type { BlockSymbolTable, ProgramSymbolTable } from '../symbol-table';
 import { SymbolTable } from '../symbol-table';
 import { generateSyntaxError, GlimmerSyntaxError } from '../syntax-error';
 import { isLowerCase, isUpperCase } from '../utils';
-import { isPresent, type PresentArray } from '../utils/array.js';
+import { type PresentArray, isPresent } from '../utils/array.js';
 import { assert } from '../utils/assert.js';
 import type * as ASTv1 from '../v1/api';
 import type { SourceLocation } from '../v1/api';
 import { Phase1Builder } from '../v1/parser-builders';
 import * as ASTv2 from './api';
 import type { BuildElement } from './builders';
-import { Phase2Builder, type CallParts } from './builders';
+import { type CallParts, Phase2Builder } from './builders';
 import {
+  type Resolution,
   AppendSyntaxContext,
   AttrValueSyntaxContext,
   BlockSyntaxContext,
   ComponentSyntaxContext,
   ModifierSyntaxContext,
-  SexpSyntaxContext, type Resolution
+  SexpSyntaxContext,
 } from './loose-resolution';
 
 export function normalize(source: SourceTemplate): [ast: ASTv2.Template, locals: string[]] {
@@ -506,7 +507,8 @@ class ElementNormalizer {
 
     if (resolution.resolution === 'error') {
       throw GlimmerSyntaxError.from(
-        ['modifier.missing-binding', { path: resolution.path, variable: resolution.head.name }],
+        'modifier.missing-binding',
+        { path: resolution.path, variable: resolution.head.name },
         resolution.head.span
       );
     }
@@ -686,7 +688,8 @@ class ElementNormalizer {
     if (this.ctx.strict && !inScope) {
       if (uppercase) {
         throw GlimmerSyntaxError.from(
-          ['component.missing-binding', variable],
+          'component.missing-binding',
+          variable,
           loc.sliceStartChars({ skipStart: 1, chars: variable.length })
         );
       }

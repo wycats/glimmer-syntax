@@ -391,9 +391,7 @@ export class Phase1Builder {
     return SourceOffset.pos(this.#template, pos);
   }
 
-  span(
-    loc: { start: SourcePosition | SourceOffset; end: SourcePosition | SourceOffset } | 'missing'
-  ): SourceSpan {
+  span(loc: ToBuilderSpan | 'missing'): SourceSpan {
     if (loc === 'missing') {
       return SourceSpan.loc(this.#template, missing(this.#template));
     } else {
@@ -407,6 +405,11 @@ export class Phase1Builder {
     }
   }
 }
+
+export type ToBuilderSpan = {
+  start: SourcePosition | SourceOffset;
+  end: SourcePosition | SourceOffset;
+};
 
 // Nodes
 

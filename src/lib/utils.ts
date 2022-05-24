@@ -1,6 +1,6 @@
 import { SourceSpan } from './source/loc/source-span.js';
 import { GlimmerSyntaxError } from './syntax-error';
-import { existing, type Maybe, type Optional } from './utils/exists.js';
+import { type Maybe, type Optional, existing } from './utils/exists.js';
 import type * as ASTv1 from './v1/api';
 import type * as HBS from './v1/handlebars-ast';
 
@@ -153,7 +153,7 @@ class PipePair {
       const name = node.name;
 
       if (ID_INVERSE_PATTERN.exec(name)) {
-        return GlimmerSyntaxError.from(['block-params.invalid-id', name], node.loc);
+        return GlimmerSyntaxError.from('block-params.invalid-id', name, node.loc);
       }
 
       params.push(name);

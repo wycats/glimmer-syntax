@@ -219,10 +219,14 @@ export interface NumberLiteral extends CommonNode {
 
 export interface UndefinedLiteral extends CommonNode {
   type: 'UndefinedLiteral';
+  original: undefined;
+  value: undefined;
 }
 
 export interface NullLiteral extends CommonNode {
   type: 'NullLiteral';
+  original: null;
+  value: null;
 }
 
 export interface Hash extends CommonNode {
