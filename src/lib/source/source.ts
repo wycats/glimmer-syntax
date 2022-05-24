@@ -1,9 +1,13 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { DEBUG } from '@glimmer/env';
 import { parse, parseWithoutProcessing } from '@handlebars/parser';
+import { EntityParser, EventedTokenizer, HTML5NamedCharRefs } from 'simple-html-tokenizer';
+
 import type { ASTv1 } from '../../index';
 import { getEmbedderLocals } from '../get-template-locals';
-import { CodemodEntityParser, Syntax, type ASTPluginEnvironment } from '../parser/plugins';
+import { HandlebarsNodeVisitors } from '../parser/handlebars-node-visitors';
+import { Parser } from '../parser/parser';
+import { type ASTPluginEnvironment, CodemodEntityParser, Syntax } from '../parser/plugins';
 import type { NormalizedPreprocessOptions } from '../parser/preprocess';
 import { TokenizerEventHandlers } from '../parser/tokenizer-event-handlers';
 import traverse from '../traversal/traverse';
@@ -79,8 +83,19 @@ export class SourceTemplate {
   }
 
   private parse(ast: HBS.Program): ASTv1.Template {
-    const entityParser = this.purpose === 'codemod' ? new CodemodEntityParser() : undefined;
-    const parser = new TokenizerEventHandlers(this, entityParser);
+    const entityParser =
+      this.purpose === 'codemod' ? new CodemodEntityParser() : new EntityParser(HTML5NamedCharRefs);
+
+    const parser = Parser.create(
+      this,
+      new EventedTokenizer(
+        TokenizerEventHandlers.create(() => parser),
+        entityParser,
+        this.purpose
+      ),
+      HandlebarsNodeVisitors.create(() => parser)
+    );
+    // const parser = new TokenizerEventHandlers(this, entityParser);
     const program = parser.acceptTemplate(ast);
     program.blockParams = getEmbedderLocals(program) ?? [];
     return program;
@@ -127,13 +142,23 @@ export class SourceTemplate {
     return (this.source ?? '').slice(start, end);
   }
 
+  sliceAST({ start, end }: { start: SourcePosition; end: SourcePosition }): string {
+    const startOffset = this.offsetFor(start.line, start.column).offset;
+    const endOffset = this.offsetFor(end.line, end.column).offset;
+
+    if (startOffset === null || endOffset === null) {
+      return '';
+    } else {
+      return this.slice(startOffset, endOffset);
+    }
+  }
+
   offsetFor(line: number, column: number): SourceOffset {
     return SourceOffset.pos(this, { line, column });
   }
 
   spanFor({ start, end }: { start: SourcePosition; end: SourcePosition }): SourceSpan {
     return SourceSpan.loc(this, {
-      source: this.module,
       start: { line: start.line, column: start.column },
       end: { line: end.line, column: end.column },
     });

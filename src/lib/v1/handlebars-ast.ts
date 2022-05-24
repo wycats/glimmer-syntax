@@ -166,7 +166,7 @@ export interface PartialBlockStatement extends CommonNode {
 export interface ContentStatement extends CommonNode {
   type: 'ContentStatement';
   value: string;
-  original: StripFlags;
+  original: string;
 }
 
 export interface CommentStatement extends CommonNode {

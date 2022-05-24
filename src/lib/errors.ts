@@ -24,6 +24,8 @@ const HBS_CONSTRUCTS = {
   Decorator: ['decorator', 'decorators'],
   DecoratorBlock: ['decorator-block', 'decorator blocks'],
 
+  Block: ['block', 'blocks'],
+
   Path: ['path', 'paths'],
   StringLiteral: ['string literal', 'string literals'],
   NumberLiteral: ['number literal', 'number literals'],
@@ -85,6 +87,7 @@ export const SYNTAX_ERRORS = {
   'hbs.syntax.invalid-dotslash': 'Using "./" is not supported in Glimmer and unnecessary',
   'hbs.syntax.invalid-argument': `Invalid argument: Arguments must start with \`@\` followed by a-z`,
   'hbs.syntax.invalid-variable': `Invalid variable: Variables must start with a-z or A-Z`,
+  'hbs.syntax.invalid-block': `A block may only be used inside an HTML element or another block`,
   'hbs.syntax.unsupported-construct': (name: HbsConstruct) =>
     `Handlebars ${formatHbsConstruct(name, 'plural')} are not supported`,
   'hbs.syntax.not-callable': (literal: {
@@ -110,6 +113,9 @@ export const SYNTAX_ERRORS = {
   'html.syntax.invalid-hbs-curly': (situation: ParserState) =>
     `Invalid mustache${formatParserState(situation)}`,
   'html.syntax.invalid-hbs-expression': (options: HbsErrorOptions) =>
+    `Invalid ${formatHbsConstruct(options.is, 'singular')}${formatParserState(options.in)}`,
+  'html.syntax.invalid-named-block': `Invalid named block without a name (\`:\`) detected. You may have created a named block without a name, or you may have began your name with a number. Named blocks must have names that are at least one character long, and begin with a lower case letter`,
+  'html.syntax.invalid-construct': (options: HbsErrorOptions) =>
     `Invalid ${formatHbsConstruct(options.is, 'singular')}${formatParserState(options.in)}`,
 
   'passthrough.tokenizer': (error: string) => `HTML Error: ${error}`,

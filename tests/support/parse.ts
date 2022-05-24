@@ -14,5 +14,7 @@ export function parse(source: string, options?: PreprocessOptions): ASTv1.Templa
           .join('\n')
       : source;
 
+  console.log({ outdented: JSON.stringify(outdented) });
+
   return preprocess(outdented, { meta: { moduleName: 'test-module' }, ...options });
 }

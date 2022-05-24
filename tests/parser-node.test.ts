@@ -1,14 +1,16 @@
+import { GlimmerSyntaxError } from '@glimmer/syntax';
 import {
-  Buildersv1,
-  GlimmerSyntaxError,
-  ParserState,
-  preprocess as parse,
-  preprocess,
   type ASTv1,
   type Dict,
   type SymbolicSyntaxError,
+  Buildersv1,
+  ParserState,
+  preprocess as parse,
+  preprocess,
 } from '@glimmer/syntax';
 import { describe, expect, test } from 'vitest';
+
+import type { PresentArray } from '../src/lib/utils/array';
 import { astEqual } from './support';
 import { AnnotatedSource } from './support/annotated.js';
 
@@ -18,12 +20,12 @@ function syntaxError(source: string, error: SymbolicSyntaxError) {
   const annotated = AnnotatedSource.from(source);
   const result = preprocess.normalized(annotated.source, annotated.options);
 
-  expect(result.errors, 'Expected syntax errors').toBeTruthy();
-
-  if (result.errors!.length > 1) {
-    console.log({ errors: result.errors });
-  }
-  expect(result.errors, 'Expected exactly one syntax error').toHaveLength(1);
+  expect(result.errors, 'errors').toSatisfy(
+    (errors: PresentArray<GlimmerSyntaxError> | undefined) => {
+      return errors !== undefined && errors.length === 1;
+    },
+    'expected exactly one syntax error'
+  );
 
   const actualError: GlimmerSyntaxError = (result.errors as [GlimmerSyntaxError])[0];
   const expectedError = GlimmerSyntaxError.from(error, annotated.span);

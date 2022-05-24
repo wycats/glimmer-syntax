@@ -139,6 +139,14 @@ export class AstPosition implements ConcretePosition {
 }
 
 export class SourceOffset {
+  static from(template: SourceTemplate, pos: SourceOffset | SourcePosition): SourceOffset {
+    if (pos instanceof SourceOffset) {
+      return pos;
+    } else {
+      return SourceOffset.pos(template, pos);
+    }
+  }
+
   static broken(template: SourceTemplate, pos: SourcePosition): SourceOffset {
     return new SourceOffset(new BrokenPosition(template, pos));
   }
@@ -203,6 +211,10 @@ export class SourceOffset {
     // }
   }
 
+  withEnd(other: SourceOffset): SourceSpan {
+    return this.until(other);
+  }
+
   /**
    * Create a `SourceOffset` by moving the character position represented by this source offset
    * forward or backward (if `by` is negative), if possible.
@@ -213,6 +225,10 @@ export class SourceOffset {
    * returns a broken offset.
    */
   move(by: number): SourceOffset {
+    if (by === 0) {
+      return this;
+    }
+
     const template = this.template;
     let offset = this.#data.offset;
 

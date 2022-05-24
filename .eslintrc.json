@@ -2,8 +2,8 @@
   "root": true,
   "parser": "@typescript-eslint/parser",
   "plugins": [
-    "@typescript-eslint",
     "prettier",
+    "@typescript-eslint",
     "unused-imports",
     "simple-import-sort"
   ],
@@ -23,10 +23,11 @@
     "eslint:recommended",
     "plugin:import/recommended",
     "plugin:import/typescript",
+    "prettier",
+    "plugin:prettier/recommended",
     "plugin:@typescript-eslint/recommended",
     "plugin:@typescript-eslint/recommended-requiring-type-checking",
-    "plugin:json/recommended",
-    "prettier"
+    "plugin:json/recommended"
   ],
   "rules": {
     "no-restricted-syntax": [

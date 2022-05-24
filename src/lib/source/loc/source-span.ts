@@ -61,7 +61,6 @@ export abstract class SourceSpan implements SpanInterface, SourceLocation {
         }
         case 'broken': {
           return SourceSpan.loc(template, {
-            source: template.module,
             start: parsed.start,
             end: parsed.end,
           });
@@ -92,7 +91,10 @@ export abstract class SourceSpan implements SpanInterface, SourceLocation {
     });
   }
 
-  static loc(template: SourceTemplate, ast: SourceLocation): SourceSpan {
+  static loc(
+    template: SourceTemplate,
+    ast: { start: SourcePosition; end: SourcePosition }
+  ): SourceSpan {
     return new ConcreteSpan({
       template,
       offsets: {

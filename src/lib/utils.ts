@@ -9,25 +9,27 @@ import type * as HBS from './v1/handlebars-ast';
 
 let ID_INVERSE_PATTERN = /[!"#%-,./;->@[-^`{-~]/;
 
-export function getBlockParams(
-  attributes: ASTv1.AttrNode[],
-  // FIXME
-  _loc: SourceSpan
-): { attrs: ASTv1.AttrNode[]; blockParams: string[] } {
+export function getBlockParams(attributes: ASTv1.AttrNode[]):
+  | {
+      type: 'ok';
+      attrs: ASTv1.AttrNode[];
+      blockParams: string[];
+    }
+  | { type: 'err'; error: GlimmerSyntaxError; attrs: []; blockParams: [] } {
   const parsed = ParsedBlockParams.parse(preparseAttrs(attributes));
 
   if (parsed === null) {
-    return { attrs: attributes, blockParams: [] };
+    return { type: 'ok', attrs: attributes, blockParams: [] };
   }
 
   const asNames = parsed.names;
 
   switch (asNames.type) {
     case 'ok': {
-      return { attrs: asNames.attributes, blockParams: asNames.params };
+      return { type: 'ok', attrs: asNames.attributes, blockParams: asNames.params };
     }
     case 'err': {
-      throw asNames.error;
+      return { type: 'err', error: asNames.error, attrs: [], blockParams: [] };
     }
   }
 }
@@ -287,10 +289,7 @@ export function childrenFor(
   }
 }
 
-export function appendChild(
-  parent: ASTv1.Block | ASTv1.Template | ASTv1.ElementNode,
-  node: ASTv1.Statement
-): void {
+export function appendChild(parent: ASTv1.Parent, node: ASTv1.Statement): void {
   childrenFor(parent).push(node);
 }
 

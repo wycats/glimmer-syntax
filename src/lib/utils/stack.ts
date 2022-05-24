@@ -1,4 +1,7 @@
-import { existing } from "./exists.js";
+import { assert } from 'console';
+
+import type { PresentArray } from './array';
+import { existing } from './exists.js';
 
 export class Stack<T extends object> {
   static empty<T extends object>(): Stack<T> {
@@ -40,6 +43,41 @@ export class Stack<T extends object> {
   }
 
   toArray(): T[] {
+    return this.#items;
+  }
+}
+
+export class PresentStack<T extends object> extends Array<T> {
+  static create<T extends object>(initial: T): PresentStack<T> {
+    return new PresentStack([initial]);
+  }
+
+  readonly #items: PresentArray<T>;
+
+  private constructor(items: PresentArray<T>) {
+    super(...items);
+    this.#items = items;
+  }
+
+  get initial(): T {
+    return this.#items[0];
+  }
+
+  get current(): T {
+    return this.#items[this.#items.length - 1];
+  }
+
+  push(item: T): number {
+    return this.#items.push(item);
+  }
+
+  pop(): T {
+    assert(this.#items.length > 1, `Cannot pop the initial entry from a PresentStack`);
+
+    return this.#items.pop() as T;
+  }
+
+  toArray(): PresentArray<T> {
     return this.#items;
   }
 }

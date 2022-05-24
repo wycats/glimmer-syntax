@@ -1,6 +1,7 @@
 export function assert(condition: any, message: string): asserts condition {
   if (!condition) {
-    throw message;
+    debugger;
+    throw Error(message);
   }
 }
 

@@ -1,4 +1,5 @@
-import { AST, preprocess as parse, traverse, WalkerPath } from '@glimmer/syntax';
+import type { AST, WalkerPath } from '@glimmer/syntax';
+import { preprocess as parse, traverse } from '@glimmer/syntax';
 import { describe, expect, test } from 'vitest';
 
 function traversalEqual(node: AST.Node, expectedTraversal: Array<[string, AST.BaseNode]>) {
@@ -32,7 +33,7 @@ function traversalEqual(node: AST.Node, expectedTraversal: Array<[string, AST.Ba
 }
 
 describe('Traversal - visiting', () => {
-  test('Elements and attributes', function () {
+  test('Elements and attributes', () => {
     let ast = parse(
       `<div id="id" class="large {{this.classes}}" value={{this.value}}><b></b><b></b></div>`
     );
@@ -76,7 +77,7 @@ describe('Traversal - visiting', () => {
     ]);
   });
 
-  test('Element modifiers', function () {
+  test('Element modifiers', () => {
     let ast = parse(`<div {{modifier}}{{modifier param1 param2 key1=value key2=value}}></div>`);
     let el = ast.body[0] as AST.ElementNode;
     traversalEqual(ast, [
@@ -111,7 +112,7 @@ describe('Traversal - visiting', () => {
     ]);
   });
 
-  test('Blocks', function () {
+  test('Blocks', () => {
     let ast = parse(
       `{{#block}}{{/block}}` +
         `{{#block param1 param2 key1=value key2=value}}<b></b><b></b>{{/block}}`
@@ -158,7 +159,7 @@ describe('Traversal - visiting', () => {
     ]);
   });
 
-  test('Mustaches', function () {
+  test('Mustaches', () => {
     let ast = parse(`{{mustache}}` + `{{mustache param1 param2 key1=value key2=value}}`);
 
     let must1 = ast.body[0] as AST.MustacheStatement;
@@ -194,7 +195,7 @@ describe('Traversal - visiting', () => {
     ]);
   });
 
-  test('Nested helpers', function () {
+  test('Nested helpers', () => {
     let ast = parse(`{{helper
     (helper param1 param2 key1=value key2=value)
     key1=(helper param)
@@ -264,7 +265,7 @@ describe('Traversal - visiting', () => {
     ]);
   });
 
-  test('Comments', function () {
+  test('Comments', () => {
     let ast = parse(
       `<!-- HTML comment -->{{!-- Handlebars comment --}}<div {{! Other Comment }}></div>`
     );
@@ -285,7 +286,7 @@ describe('Traversal - visiting', () => {
 });
 
 describe(`Traversal - visiting paths`, () => {
-  test('Basics', function (assert) {
+  test('Basics', (assert) => {
     assert.expect(3);
 
     let ast = parse(`{{#if foo}}<div>bar</div>{{/if}}`);
@@ -305,7 +306,7 @@ describe(`Traversal - visiting paths`, () => {
     });
   });
 
-  test('Helper', function (assert) {
+  test('Helper', (assert) => {
     assert.expect(2);
 
     let ast = parse(`{{#foo (bar this.blah)}}{{/foo}}`);
@@ -320,13 +321,13 @@ describe(`Traversal - visiting paths`, () => {
             { nodeType: 'PathExpression', key: null },
           ]);
 
-          expect((path.parent!.node as AST.SubExpression).params).toContain(node);
+          expect((path.parent?.node as AST.SubExpression | undefined)?.params).toContain(node);
         }
       },
     });
   });
 
-  test('Modifier', function (assert) {
+  test('Modifier', (assert) => {
     let hasSymbol = typeof Symbol !== 'undefined';
 
     assert.expect(hasSymbol ? 3 : 2);
@@ -349,7 +350,7 @@ describe(`Traversal - visiting paths`, () => {
             ).toEqual(['ElementModifierStatement', 'ElementNode', 'Template']);
           }
 
-          expect((path.parent!.node as AST.ElementModifierStatement).path).toBe(node);
+          expect((path.parent?.node as AST.ElementModifierStatement | undefined)?.path).toBe(node);
         }
       },
     });

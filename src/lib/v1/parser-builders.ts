@@ -1,6 +1,6 @@
-import type { ParserNodeBuilder } from '../parser';
+import type { ParserNodeBuilder } from '../parser/parser';
 import { Scope } from '../parser/scope';
-import type { SourceOffset } from '../source/loc/offset';
+import { SourceOffset } from '../source/loc/offset';
 import { SourceSpan } from '../source/loc/source-span';
 import { missing } from '../source/location.js';
 import type { SourceTemplate } from '../source/source.js';
@@ -357,7 +357,7 @@ export class Phase1Builder {
   }: {
     type: T['type'];
     value: T['value'];
-    loc?: SourceLocation;
+    loc?: SourceSpan;
   }): T {
     return {
       type,
@@ -387,11 +387,23 @@ export class Phase1Builder {
     return this.literal({ type: 'NumberLiteral', value, loc });
   }
 
-  span(loc: SourceLocation | 'missing'): SourceSpan {
+  offset(pos: SourcePosition): SourceOffset {
+    return SourceOffset.pos(this.#template, pos);
+  }
+
+  span(
+    loc: { start: SourcePosition | SourceOffset; end: SourcePosition | SourceOffset } | 'missing'
+  ): SourceSpan {
     if (loc === 'missing') {
       return SourceSpan.loc(this.#template, missing(this.#template));
     } else {
-      return SourceSpan.loc(this.#template, loc);
+      return SourceSpan.from({
+        template: this.#template,
+        offsets: {
+          start: SourceOffset.from(this.#template, loc.start),
+          end: SourceOffset.from(this.#template, loc.end),
+        },
+      });
     }
   }
 }

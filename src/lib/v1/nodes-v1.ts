@@ -340,3 +340,4 @@ export type Literal = Nodes[LiteralName];
 export type Expression = Nodes[ExpressionName];
 export type Expressions = Pick<Nodes, ExpressionName>;
 export type TopLevelStatement = Statement | Nodes['Block'];
+export type Parent = ElementNode | Block | Template;
