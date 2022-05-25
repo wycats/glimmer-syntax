@@ -3,7 +3,7 @@ import { SourceSlice } from '../source/slice';
 import type { SourceTemplate } from '../source/source';
 import { SpanList } from '../source/span-list';
 import type { BlockSymbolTable, ProgramSymbolTable, SymbolTable } from '../symbol-table';
-import { isPresent, type PresentArray } from '../utils/array.js';
+import { type PresentArray, isPresent } from '../utils/array.js';
 import { assert } from '../utils/assert.js';
 import type { DeclaredAt } from '../v1/api';
 import * as ASTv2 from './api';

@@ -9,10 +9,11 @@ import type { SourceOffset } from '../source/loc/offset';
 import type { SourceSpan } from '../source/loc/source-span';
 import type { SourceTemplate } from '../source/source';
 import type { GlimmerSyntaxError } from '../syntax-error.js';
-import { appendChild } from '../utils';
+import { appendChild, getBlockParams } from '../utils';
 import { isPresent } from '../utils/array.js';
 import { assert } from '../utils/assert.js';
-import { type Optional, existing } from '../utils/exists.js';
+import { existing } from '../utils/exists.js';
+import { PresentStack } from '../utils/stack.js';
 import { Stack } from '../utils/stack.js';
 import type * as ASTv1 from '../v1/api';
 import type * as HBS from '../v1/handlebars-ast';
@@ -42,222 +43,7 @@ export interface Tag<T extends 'StartTag' | 'EndTag'> {
   readonly loc: SourceSpan;
 }
 
-type AttrPart = ASTv1.TextNode | ASTv1.MustacheStatement;
-
-export class ConstructingAttribute {
-  static create(
-    parser: Parser,
-    tag: ParserNodeBuilder<Tag<'StartTag'>> | ParserNodeBuilder<Tag<'EndTag'>>
-  ): ConstructingAttribute {
-    return new ConstructingAttribute(
-      parser,
-      tag,
-      '',
-      { quoted: false, dynamic: false },
-      parser.offset()
-    );
-  }
-
-  readonly type = 'Attribute';
-
-  #parser: Parser;
-  #tag: ParserNodeBuilder<Tag<'StartTag'>> | ParserNodeBuilder<Tag<'EndTag'>>;
-  #name: string;
-  #properties: {
-    quoted: boolean;
-    dynamic: boolean;
-  };
-  #start: SourceOffset;
-
-  constructor(
-    parser: Parser,
-    tag: ParserNodeBuilder<Tag<'StartTag'>> | ParserNodeBuilder<Tag<'EndTag'>>,
-    name: string,
-    properties: {
-      quoted: boolean;
-      dynamic: boolean;
-    },
-    start: SourceOffset
-  ) {
-    this.#parser = parser;
-    this.#tag = tag;
-    this.#name = name;
-    this.#properties = properties;
-    this.#start = start;
-  }
-
-  mark(property: 'quoted' | 'dynamic', as = true) {
-    this.#properties[property] = as;
-  }
-
-  appendToName(char: string): void {
-    this.#name += char;
-  }
-
-  finish(
-    value: ASTv1.AttrValue
-  ): ParserNodeBuilder<Tag<'StartTag'>> | ParserNodeBuilder<Tag<'EndTag'>> {
-    const attr = this.#parser.builder.attr({
-      name: this.#name,
-      value,
-      loc: this.#start.withEnd(value.loc.getEnd()),
-    });
-
-    this.#tag.attributes.push(attr);
-
-    return this.#tag;
-  }
-}
-
-class ConstructingAttributeValue {
-  static create(parser: Parser, attribute: ConstructingAttribute, options: { quoted: boolean }) {
-    return new ConstructingAttributeValue(
-      parser.offset().collapsed(),
-      parser,
-      attribute,
-      null,
-      [],
-      {
-        ...options,
-        dynamic: false,
-      }
-    );
-  }
-
-  readonly type = 'AttributeValue';
-
-  #span: SourceSpan;
-  #parser: Parser;
-  #attribute: ConstructingAttribute;
-  #currentPart: ASTv1.TextNode | null;
-  #parts: AttrPart[];
-  #properties: {
-    quoted: boolean;
-    dynamic: boolean;
-  };
-
-  constructor(
-    span: SourceSpan,
-    parser: Parser,
-    attribute: ConstructingAttribute,
-    currentPart: ASTv1.TextNode | null,
-    parts: AttrPart[],
-    properties: {
-      quoted: boolean;
-      dynamic: boolean;
-    }
-  ) {
-    this.#span = span;
-    this.#parser = parser;
-    this.#attribute = attribute;
-    this.#currentPart = currentPart;
-    this.#parts = parts;
-    this.#properties = properties;
-  }
-
-  dynamic(value: ASTv1.MustacheStatement) {
-    if (this.#currentPart) {
-      this.finishText();
-    }
-
-    this.#properties.dynamic = true;
-    this.#parts.push(value);
-  }
-
-  startText() {
-    this.#currentPart = null;
-  }
-
-  continueText(char: string) {
-    const current = this.#currentPart;
-
-    if (current) {
-      current.chars += char;
-      current.loc = current.loc.withEnd(this.#parser.offset());
-    } else {
-      this.#currentPart = this.#parser.builder.text({
-        chars: char,
-        loc: this.#prevChar(char).collapsed(),
-      });
-    }
-  }
-
-  finishText() {
-    this.#parts.push(existing(this.#currentPart));
-    this.#currentPart = null;
-  }
-
-  finish(): ParserNodeBuilder<Tag<'StartTag'>> | ParserNodeBuilder<Tag<'EndTag'>> {
-    if (this.#currentPart) {
-      this.finishText();
-    }
-
-    const span = this.#span.withEnd(this.#parser.offset());
-
-    const tag = this.#attribute.finish(this.#assemble(span));
-
-    if (tag.type === 'EndTag') {
-      this.#parser.error('elements.invalid-attrs-in-end-tag', span);
-    }
-
-    return tag;
-  }
-
-  get #lastPart(): AttrPart | null {
-    return this.#parts.length === 0 ? null : this.#parts[this.#parts.length - 1];
-  }
-
-  #prevChar(char: string): SourceOffset {
-    const last = this.#lastPart;
-
-    if (char === '\n') {
-      return last ? last.loc.getEnd() : this.#span.getStart();
-    } else {
-      return this.#parser.offset().move(-1);
-    }
-  }
-
-  #assemble(span: SourceSpan): ASTv1.AttrValue {
-    const { quoted, dynamic } = this.#properties;
-    const parts = this.#parts;
-
-    if (dynamic) {
-      if (quoted) {
-        this.#parser.assert(
-          isPresent(parts),
-          `the concatenation parts of an element should not be empty`
-        );
-        return this.#parser.builder.concat(parts, span);
-      } else {
-        this.#parser.assert(
-          parts.length === 1,
-          `an attribute value cannot have more than one dynamic part if it's not concatentated`
-        );
-        return parts[0];
-      }
-    } else if (parts.length === 0) {
-      return this.#parser.builder.text({ chars: '', loc: span });
-    } else {
-      return {
-        ...parts[0],
-        loc: span,
-      };
-    }
-  }
-}
-
-export interface Attribute {
-  type: 'Attribute';
-  name: string;
-  currentPart: ASTv1.TextNode | null;
-  parts: (ASTv1.MustacheStatement | ASTv1.TextNode)[];
-  isQuoted: boolean;
-  isDynamic: boolean;
-  start: SourceOffset;
-  valueSpan: SourceSpan | null;
-}
-
-export type Constructing =
+export type AnyConstructing =
   | ParserNodeBuilder<ASTv1.CommentStatement>
   | ParserNodeBuilder<Tag<'StartTag'>>
   | ParserNodeBuilder<Tag<'EndTag'>>
@@ -279,7 +65,7 @@ export class Parser {
       [],
       Stack.empty(),
       Stack.from([Phase1Builder.withScope(template, Scope.top(template.options))]),
-      null
+      PresentStack.create(ConstructingTopLevel.start(this))
     );
   }
 
@@ -290,7 +76,7 @@ export class Parser {
   #errors: GlimmerSyntaxError[];
   #parentStack: Stack<ASTv1.Parent>;
   #builderStack: Stack<Phase1Builder>;
-  #constructing: Optional<Readonly<Constructing>>;
+  #constructingStack: PresentStack<Constructing>;
 
   constructor(
     template: SourceTemplate,
@@ -300,7 +86,7 @@ export class Parser {
     errors: GlimmerSyntaxError[],
     stack: Stack<ASTv1.Parent>,
     builderStack: Stack<Phase1Builder>,
-    constructing: Optional<Readonly<Constructing>>
+    constructing: PresentStack<Constructing>
   ) {
     this.#template = template;
     this.#tokenizer = tokenizer;
@@ -309,7 +95,7 @@ export class Parser {
     this.#errors = errors;
     this.#parentStack = stack;
     this.#builderStack = builderStack;
-    this.#constructing = constructing;
+    this.#constructingStack = constructing;
   }
 
   traced(name: `${string}:end`): void;
@@ -382,7 +168,7 @@ export class Parser {
   }
 
   acceptTemplate(node: HBS.Program): ASTv1.Template {
-    const template = this.accept(node) as ASTv1.Template;
+    const template = this.#handlebars.Template(node);
 
     if (isPresent(this.#errors)) {
       template.errors = this.#errors;
@@ -430,7 +216,7 @@ export class Parser {
    * invalid attribute names later on in the processing pipeline).
    */
   tokenizerError(message: string) {
-    if (this.#constructing?.type === 'Attribute') {
+    if (this.#constructingStack?.type === 'Attribute') {
       return;
     } else {
       this.error('passthrough.tokenizer', message, this.offset().collapsed());
@@ -442,17 +228,65 @@ export class Parser {
     return this.#template.offsetFor(line, column);
   }
 
-  constructing(constructing: Constructing) {
-    this.#constructing = constructing;
+  readonly comment = {
+    start: () => {
+      this.#constructingStack.push(ConstructingComment.start(this));
+    },
+    finish: () => {
+      const comment = this.#popConstructing(ConstructingComment).finish();
+      this.#constructing(ConstructingParent).append(comment);
+    },
+  };
+
+  readonly text = {
+    start: () => {
+      this.#constructingStack.push(ConstructingText.start(this));
+    },
+    finish: () => {
+      const text = this.#popConstructing(ConstructingText).finish();
+      this.#constructing(ConstructingParent).append(text);
+    },
+  };
+
+  readonly element = {
+    start: () => {
+      this.#constructingStack.push(ConstructingStartTag.start(this));
+    },
+  };
+
+  #constructing<C extends Constructing>(type: abstract new (...args: any[]) => C): C {
+    const current = this.#constructingStack.current;
+
+    assert(
+      current instanceof type,
+      `Expected the parser to be constructing a ${type.name}, but it was constructing a ${current.constructor.name}`
+    );
+
+    return current;
+  }
+
+  #popConstructing<C extends Constructing>(type: abstract new (...args: any[]) => C): C {
+    const current = this.#constructingStack.pop();
+
+    assert(
+      current instanceof type,
+      `Expected the parser to be constructing a ${type.name}, but it was constructing a ${current.constructor.name}`
+    );
+
+    return current;
+  }
+
+  addChar(char: string) {
+    this.#constructingStack.current.addChar(char);
   }
 
   startAttr() {
-    if (this.#constructing?.type === 'EndTag') {
+    if (this.#constructingStack?.type === 'EndTag') {
       this.error('elements.invalid-attrs-in-end-tag', this.offset().collapsed());
     }
 
     const tag = this.#verifyConstructing('StartTag', 'EndTag');
-    this.#constructing = ConstructingAttribute.create(this, tag);
+    this.#constructingStack = ConstructingAttribute.create(this, tag);
   }
 
   startAttrValue(isQuoted: boolean) {
@@ -460,22 +294,22 @@ export class Parser {
       quoted: isQuoted,
     });
 
-    this.#constructing = value;
+    this.#constructingStack = value;
   }
 
   finishAttr() {
-    if (this.#constructing?.type === 'Attribute') {
+    if (this.#constructingStack?.type === 'Attribute') {
       this.startAttrValue(false);
     }
-    this.#constructing = this.#verifyConstructing('AttributeValue').finish();
+    this.#constructingStack = this.#verifyConstructing('AttributeValue').finish();
     this.transitionTo('afterAttributeName');
   }
 
-  #verifyConstructing<C extends Constructing['type']>(
+  #verifyConstructing<C extends AnyConstructing['type']>(
     ...types: C[]
-  ): Extract<Constructing, { type: C }> {
+  ): Extract<AnyConstructing, { type: C }> {
     const constructing = existing(
-      this.#constructing,
+      this.#constructingStack,
       `BUG: expected the parser to be constructing ${types.join(
         ' | '
       )}, but it wasn't constructing anything`
@@ -488,7 +322,7 @@ export class Parser {
       }`
     );
 
-    return constructing as Extract<Constructing, { type: C }>;
+    return constructing as Extract<AnyConstructing, { type: C }>;
   }
 
   appendLeaf(type: 'TextNode' | 'CommentStatement') {
@@ -520,18 +354,18 @@ export class Parser {
     return this.#parentStack.pop();
   }
 
-  modify<C extends Constructing['type']>(
+  modify<C extends AnyConstructing['type']>(
     type: C | C[],
-    append: (node: Extract<Constructing, { type: C }>) => void
+    append: (node: Extract<AnyConstructing, { type: C }>) => void
   ): void {
     const constructing = this.#verifyConstructing(...(Array.isArray(type) ? type : [type]));
 
-    append(constructing as Extract<Constructing, { type: C }>);
+    append(constructing as Extract<AnyConstructing, { type: C }>);
   }
 
   finishTag(): Tag<'StartTag'> | Tag<'EndTag'> {
     const constructing = existing(
-      this.#constructing,
+      this.#constructingStack,
       `BUG: expected the parser to be constructing a tag, but it wasn't`
     );
 
@@ -540,7 +374,7 @@ export class Parser {
       `BUG: expected a tag, but got ${constructing.type}`
     );
 
-    this.#constructing = null;
+    this.#constructingStack = null;
 
     return this.#finish(constructing) as Tag<'StartTag'> | Tag<'EndTag'>;
   }
@@ -627,6 +461,365 @@ export class Parser {
     }
 
     assert(condition, message);
+  }
+}
+
+type AttrPart = ASTv1.TextNode | ASTv1.MustacheStatement;
+
+export abstract class Constructing<Parent = null> {
+  static start<T extends Constructing<null>>(
+    this: new (parser: Parser, parent: null) => T,
+    parser: Parser
+  ): T;
+  static start<This extends new (parser: Parser, parent: any) => any>(
+    this: This,
+    parser: Parser,
+    parent: This extends new (parser: Parser, parent: infer Parent) => any ? Parent : never
+  ): This extends new (parser: Parser, parent: infer Parent) => infer T ? T : never;
+  static start<T extends Constructing>(
+    this: new (parser: Parser, parent: unknown) => T,
+    parser: Parser,
+    parent?: unknown
+  ): T {
+    return new this(parser, parent ?? null);
+  }
+
+  #parser: Parser;
+  #parent: Parent;
+  #start: SourceOffset;
+
+  constructor(parser: Parser, parent: Parent) {
+    this.#parser = parser;
+    this.#start = parser.offset();
+    this.#parent = parent;
+  }
+
+  get parser() {
+    return this.#parser;
+  }
+
+  get b() {
+    return this.#parser.builder;
+  }
+
+  abstract addChar(char: string): void;
+
+  get parent(): Parent {
+    return this.#parent;
+  }
+
+  span(): SourceSpan {
+    return this.#start.withEnd(this.#parser.offset());
+  }
+}
+
+abstract class ConstructingParent<T extends ASTv1.Parent> extends Constructing {
+  #statements: ASTv1.Statement[] = [];
+
+  append(node: ASTv1.Statement): void {
+    this.#statements.push(node);
+  }
+
+  abstract finish(): T;
+}
+
+class ConstructingTopLevel extends ConstructingParent<ASTv1.Template> {
+  addChar() {
+    assert(false, `BUG: unexpected addChar in top-level`);
+  }
+
+  finish(): ASTv1.Template {
+    throw new Error('Method not implemented.');
+  }
+}
+
+class ConstructingComment extends Constructing {
+  #chars = '';
+
+  addChar(char: string) {
+    this.#chars = char;
+  }
+
+  finish(): ASTv1.CommentStatement {
+    return this.b.comment(this.#chars, this.span());
+  }
+}
+
+class ConstructingText extends Constructing {
+  #chars = '';
+
+  addChar(char: string) {
+    this.#chars = char;
+  }
+
+  finish(): ASTv1.TextNode {
+    return this.b.text({ chars: this.#chars, loc: this.span() });
+  }
+}
+
+class ConstructingTagName extends Constructing<ConstructingStartTag | ConstructingEndTag> {
+  #name = '';
+  #span: SourceSpan = super.span();
+
+  addChar(char: string) {
+    this.#name += char;
+  }
+
+  finish() {
+    this.#span = this.#span.extend(super.span());
+  }
+
+  get name(): string {
+    return this.#name;
+  }
+
+  span(): SourceSpan {
+    return this.#span;
+  }
+}
+
+export class ConstructingStartTag extends Constructing {
+  #name = ConstructingTagName.start(this.parser, this);
+  readonly #attributes: ASTv1.AttrNode[] = [];
+  readonly #modifiers: ASTv1.ElementModifierStatement[] = [];
+  readonly #comments: ASTv1.MustacheCommentStatement[] = [];
+  readonly #statements: ASTv1.Statement[] = [];
+
+  addChar(char: string): void {
+    assert(false, `BUG: unexpected addChar in start tag`);
+  }
+
+  beginAttribute() {
+    return ConstructingAttribute.start(this.parser, this);
+  }
+
+  appendAttribute(attr: ASTv1.AttrNode) {
+    this.#attributes.push(attr);
+  }
+
+  append(statement: ASTv1.Statement) {
+    this.#statements.push(statement);
+  }
+
+  selfClosing(): ASTv1.ElementNode {
+    return this.#finish(true);
+  }
+
+  finish(end: ConstructingEndTag): ASTv1.ElementNode {
+    end.verify(this.#name.name);
+    return this.#finish(false);
+  }
+
+  #finish(selfClosing: boolean) {
+    const { attrs, blockParams } = this.#blockParams;
+
+    return this.b.element({
+      tag: this.#name.name,
+      selfClosing,
+      attrs,
+      modifiers: this.#modifiers,
+      comments: this.#comments,
+      children: this.#statements,
+      blockParams,
+      loc: this.span(),
+    });
+  }
+
+  get #blockParams(): { attrs: ASTv1.AttrNode[]; blockParams: string[] } {
+    const parsedBlockParams = getBlockParams(this.#attributes);
+
+    if (parsedBlockParams.type === 'err') {
+      this.parser.reportError(parsedBlockParams.error);
+    }
+
+    return parsedBlockParams;
+  }
+}
+
+export class ConstructingEndTag extends Constructing<ConstructingStartTag> {
+  #name = '';
+
+  addChar(char: string) {
+    this.#name += char;
+  }
+
+  appendAttribute(attribute: ASTv1.AttrNode) {
+    this.parser.error('elements.invalid-attrs-in-end-tag', attribute.loc);
+  }
+
+  verify(openTagName: string): boolean {
+    if (this.#name !== openTagName) {
+      this.parser.error(
+        'elements.unbalanced-tags',
+        { open: openTagName, close: this.#name },
+        this.span()
+      );
+      return false;
+    }
+
+    return true;
+  }
+}
+
+export class ConstructingAttribute extends Constructing<ConstructingStartTag | ConstructingEndTag> {
+  #name = '';
+  readonly #properties: {
+    quoted: boolean;
+    dynamic: boolean;
+  } = {
+    quoted: false,
+    dynamic: false,
+  };
+
+  mark(property: 'quoted' | 'dynamic', as = true) {
+    this.#properties[property] = as;
+  }
+
+  addChar(char: string): void {
+    this.#name += char;
+  }
+
+  startValue(isQuoted: boolean): ConstructingAttributeValue {
+    return ConstructingAttributeValue.create(this.parser, this, { quoted: isQuoted });
+  }
+
+  finish(value: ASTv1.AttrValue): ASTv1.AttrNode {
+    return this.b.attr({
+      name: this.#name,
+      value,
+      loc: this.span(),
+    });
+  }
+}
+
+class ConstructingAttributeValue {
+  static create(parser: Parser, attribute: ConstructingAttribute, options: { quoted: boolean }) {
+    return new ConstructingAttributeValue(
+      parser.offset().collapsed(),
+      parser,
+      attribute,
+      null,
+      [],
+      {
+        ...options,
+        dynamic: false,
+      }
+    );
+  }
+
+  readonly type = 'AttributeValue';
+
+  #span: SourceSpan;
+  #parser: Parser;
+  #attribute: ConstructingAttribute;
+  #currentPart: ASTv1.TextNode | null;
+  #parts: AttrPart[];
+  #properties: {
+    quoted: boolean;
+    dynamic: boolean;
+  };
+
+  constructor(
+    span: SourceSpan,
+    parser: Parser,
+    attribute: ConstructingAttribute,
+    currentPart: ASTv1.TextNode | null,
+    parts: AttrPart[],
+    properties: {
+      quoted: boolean;
+      dynamic: boolean;
+    }
+  ) {
+    this.#span = span;
+    this.#parser = parser;
+    this.#attribute = attribute;
+    this.#currentPart = currentPart;
+    this.#parts = parts;
+    this.#properties = properties;
+  }
+
+  dynamic(value: ASTv1.MustacheStatement) {
+    if (this.#currentPart) {
+      this.finishText();
+    }
+
+    this.#properties.dynamic = true;
+    this.#parts.push(value);
+  }
+
+  startText() {
+    this.#currentPart = null;
+  }
+
+  addChar(char: string) {
+    const current = this.#currentPart;
+
+    if (current) {
+      current.chars += char;
+      current.loc = current.loc.withEnd(this.#parser.offset());
+    } else {
+      this.#currentPart = this.#parser.builder.text({
+        chars: char,
+        loc: this.#prevChar(char).collapsed(),
+      });
+    }
+  }
+
+  finishText() {
+    this.#parts.push(existing(this.#currentPart));
+    this.#currentPart = null;
+  }
+
+  finish(): ConstructingStartTag | ConstructingEndTag {
+    if (this.#currentPart) {
+      this.finishText();
+    }
+
+    const span = this.#span.withEnd(this.#parser.offset());
+
+    return this.#attribute.finish(this.#assemble(span));
+  }
+
+  get #lastPart(): AttrPart | null {
+    return this.#parts.length === 0 ? null : this.#parts[this.#parts.length - 1];
+  }
+
+  #prevChar(char: string): SourceOffset {
+    const last = this.#lastPart;
+
+    if (char === '\n') {
+      return last ? last.loc.getEnd() : this.#span.getStart();
+    } else {
+      return this.#parser.offset().move(-1);
+    }
+  }
+
+  #assemble(span: SourceSpan): ASTv1.AttrValue {
+    const { quoted, dynamic } = this.#properties;
+    const parts = this.#parts;
+
+    if (dynamic) {
+      if (quoted) {
+        this.#parser.assert(
+          isPresent(parts),
+          `the concatenation parts of an element should not be empty`
+        );
+        return this.#parser.builder.concat(parts, span);
+      } else {
+        this.#parser.assert(
+          parts.length === 1,
+          `an attribute value cannot have more than one dynamic part if it's not concatentated`
+        );
+        return parts[0];
+      }
+    } else if (parts.length === 0) {
+      return this.#parser.builder.text({ chars: '', loc: span });
+    } else {
+      return {
+        ...parts[0],
+        loc: span,
+      };
+    }
   }
 }
 

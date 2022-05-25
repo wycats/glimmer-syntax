@@ -1,4 +1,4 @@
-import { isPresent, type PresentArray } from '../utils/array';
+import { type PresentArray, isPresent } from '../utils/array';
 import type { SourceLocation, SourcePosition } from '../v1/handlebars-ast';
 import type { SourceSpan } from './loc/source-span.js';
 import type { SourceTemplate } from './source';

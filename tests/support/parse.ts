@@ -1,5 +1,5 @@
 import type { ASTv1 } from '@glimmer/syntax';
-import { preprocess, type PreprocessOptions } from '@glimmer/syntax';
+import { type PreprocessOptions, preprocess } from '@glimmer/syntax';
 
 export function parse(source: string, options?: PreprocessOptions): ASTv1.Template {
   // these tests were originally written with two indents, but they are now
@@ -13,8 +13,6 @@ export function parse(source: string, options?: PreprocessOptions): ASTv1.Templa
           .map((line) => line.slice(2))
           .join('\n')
       : source;
-
-  console.log({ outdented: JSON.stringify(outdented) });
 
   return preprocess(outdented, { meta: { moduleName: 'test-module' }, ...options });
 }

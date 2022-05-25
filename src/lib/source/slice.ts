@@ -1,4 +1,3 @@
-import type { Source } from './index';
 import type { SerializedSourceSpan } from './loc/serialize';
 import { SourceSpan } from './loc/source-span';
 import type { SourceTemplate } from './source';
@@ -14,7 +13,7 @@ export class SourceSlice<Chars extends string = string> {
     return new SourceSlice({ loc: offsets, chars: chars });
   }
 
-  static load(source: Source, slice: SerializedSourceSlice): SourceSlice {
+  static load(source: SourceTemplate, slice: SerializedSourceSlice): SourceSlice {
     return new SourceSlice({
       loc: SourceSpan.load(source, slice[1]),
       chars: slice[0],

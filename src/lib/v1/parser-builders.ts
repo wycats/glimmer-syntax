@@ -1,4 +1,3 @@
-import type { ParserNodeBuilder } from '../parser/parser';
 import { Scope } from '../parser/scope';
 import { SourceOffset } from '../source/loc/offset';
 import { SourceSpan } from '../source/loc/source-span';
@@ -150,7 +149,7 @@ export class Phase1Builder {
     };
   }
 
-  comment(value: string, loc: SourceOffset): ParserNodeBuilder<ASTv1.CommentStatement> {
+  comment(value: string, loc: SourceSpan): ASTv1.CommentStatement {
     return {
       type: 'CommentStatement',
       value: value,

@@ -2,7 +2,7 @@
 import { assert } from '../../utils/assert';
 import { existing } from '../../utils/exists';
 import type { SourcePosition } from '../../v1/api';
-import { UNKNOWN_POSITION } from '../index.js';
+import { UNKNOWN_POSITION } from '../location';
 import type { SourceTemplate } from '../source';
 import { SourceSpan } from './source-span';
 

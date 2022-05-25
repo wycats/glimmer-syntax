@@ -1,11 +1,13 @@
 import { DEBUG } from '@glimmer/env';
+
 import type { SourceLocation, SourcePosition } from '../../v1/handlebars-ast';
-import { UNKNOWN_POSITION } from '../index.js';
+import { UNKNOWN_POSITION } from '../location';
 import { SourceSlice } from '../slice';
 import type { SourceTemplate } from '../source';
 import { format, FormatSpan } from './format';
-import { BrokenPosition, SourceOffset } from './offset';
-import { parse, serializeBroken, serializeOffsets, type SerializedSourceSpan } from './serialize';
+import type { BrokenPosition } from './offset';
+import { SourceOffset } from './offset';
+import { type SerializedSourceSpan, parse, serializeBroken, serializeOffsets } from './serialize';
 
 export interface SpanInterface {
   readonly module: string;
@@ -281,140 +283,6 @@ export abstract class SourceSpan implements SpanInterface, SourceLocation {
     }
   }
 }
-
-// export class ConcreteSpan extends SourceSpan implements SourceLocation {
-//   #start: SourceOffset;
-//   #end: SourceOffset;
-
-//   constructor(readonly template: SourceTemplate, start: SourceOffset, end: SourceOffset) {
-//     super({ template, offsets: { start, end } });
-//     this.#start = start;
-//     this.#end = end;
-//   }
-
-//   verify(): boolean {
-//     return this.#offsets !== null;
-//   }
-
-//   getTemplate(): SourceTemplate {
-//     return this.template;
-//   }
-
-//   get module(): string {
-//     return this.template.module;
-//   }
-
-//   /**
-//    * Create a new span with the current span's end and a new beginning.
-//    */
-//   withStart(start: SourceOffset): ConcreteSpan {
-//     return new ConcreteSpan(this.template, start, this.#end);
-//   }
-
-//   /**
-//    * Create a new span with the current span's beginning and a new ending.
-//    */
-//   withEnd(end: SourceOffset): ConcreteSpan {
-//     return new ConcreteSpan(this.template, this.#start, end);
-//   }
-
-//   get #offsets(): { start: number; end: number } | null {
-//     const start = this.#start.offset;
-//     const end = this.#end.offset;
-
-//     if (start === null || end === null || start > end) {
-//       return null;
-//     }
-
-//     return { start, end };
-//   }
-
-//   asString(): string {
-//     const offsets = this.#offsets;
-
-//     if (offsets === null) {
-//       return '';
-//     } else {
-//       return this.template.slice(offsets.start, offsets.end);
-//     }
-//   }
-
-//   asAnnotatedString(): string {
-//     const template = this.template;
-//     const lines = template.lines;
-
-//     if (this.verify() && lines !== null) {
-//       const loc = this.toAST();
-
-//       return new FormatSpan(lines, loc).format(() => this.asString());
-//     } else {
-//       return this.asString();
-//     }
-//   }
-
-//   /**
-//    * For compatibility with SourceLocation in AST plugins
-//    *
-//    * @deprecated use startPosition instead
-//    */
-//   get start(): SourcePosition {
-//     return this.#start.toAST();
-//   }
-
-//   /**
-//    * For compatibility with SourceLocation in AST plugins
-//    *
-//    * @deprecated use withStart instead
-//    */
-//   set start(position: SourcePosition) {
-//     this.data.locDidUpdate({ start: position });
-//   }
-
-//   /**
-//    * For compatibility with SourceLocation in AST plugins
-//    *
-//    * @deprecated use endPosition instead
-//    */
-//   get end(): SourcePosition {
-//     return this.#end.toAST();
-//   }
-
-//   /**
-//    * For compatibility with SourceLocation in AST plugins
-//    *
-//    * @deprecated use withEnd instead
-//    */
-//   set end(position: SourcePosition) {
-//     this.data.locDidUpdate({ end: position });
-//   }
-
-//   /**
-//    * For compatibility with SourceLocation in AST plugins
-//    *
-//    * @deprecated use module instead
-//    */
-//   get source(): string {
-//     return this.module;
-//   }
-
-//   extend(other: SourceSpan): SourceSpan {
-//     if (other instanceof ConcreteSpan) {
-//       return new ConcreteSpan(this.template, this.#start, other.#end);
-//     } else {
-//       return new BrokenConcreteSpan(this.template, this.#start, other.endPosition());
-//     }
-//   }
-
-//   serialize(): SerializedSourceSpan {
-//     const offsets = this.#offsets;
-
-//     if (offsets === null) {
-//       return serializeBroken({ start: this.#start.toAST(), end: this.#end.toAST() });
-//     } else {
-//       return serializeOffsets(offsets);
-//     }
-//   }
-// }
 
 export class ConcreteSpan extends SourceSpan {
   constructor(data: SpanData, overrides?: SpanData['offsets']) {

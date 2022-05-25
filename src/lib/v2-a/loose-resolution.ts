@@ -1,5 +1,5 @@
-import type * as ASTv1 from "../v1/api";
-import * as ASTv2 from "./api";
+import type * as ASTv1 from '../v1/api';
+import * as ASTv2 from './api';
 
 export interface AstCallParts {
   path: ASTv1.Expression;
@@ -11,9 +11,7 @@ export interface VarPath extends ASTv1.PathExpression {
   head: ASTv1.VarHead;
 }
 
-export function SexpSyntaxContext(
-  node: ASTv1.SubExpression
-): ASTv2.FreeVarResolution | null {
+export function SexpSyntaxContext(node: ASTv1.SubExpression): ASTv2.FreeVarResolution | null {
   if (isSimpleCallee(node)) {
     return ASTv2.LooseModeResolution.namespaced(ASTv2.FreeVarNamespace.Helper);
   } else {
@@ -25,34 +23,23 @@ export function ModifierSyntaxContext(
   node: ASTv1.ElementModifierStatement
 ): ASTv2.FreeVarResolution | null {
   if (isSimpleCallee(node)) {
-    return ASTv2.LooseModeResolution.namespaced(
-      ASTv2.FreeVarNamespace.Modifier
-    );
+    return ASTv2.LooseModeResolution.namespaced(ASTv2.FreeVarNamespace.Modifier);
   } else {
     return null;
   }
 }
 
-export function BlockSyntaxContext(
-  node: ASTv1.BlockStatement
-): ASTv2.FreeVarResolution | null {
+export function BlockSyntaxContext(node: ASTv1.BlockStatement): ASTv2.FreeVarResolution | null {
   if (isSimpleCallee(node)) {
-    return ASTv2.LooseModeResolution.namespaced(
-      ASTv2.FreeVarNamespace.Component
-    );
+    return ASTv2.LooseModeResolution.namespaced(ASTv2.FreeVarNamespace.Component);
   } else {
     return ASTv2.LooseModeResolution.fallback();
   }
 }
 
-export function ComponentSyntaxContext(
-  node: ASTv1.PathExpression
-): ASTv2.FreeVarResolution | null {
+export function ComponentSyntaxContext(node: ASTv1.PathExpression): ASTv2.FreeVarResolution | null {
   if (isSimplePath(node)) {
-    return ASTv2.LooseModeResolution.namespaced(
-      ASTv2.FreeVarNamespace.Component,
-      true
-    );
+    return ASTv2.LooseModeResolution.namespaced(ASTv2.FreeVarNamespace.Component, true);
   } else {
     return null;
   }
@@ -62,9 +49,7 @@ export function ComponentSyntaxContext(
  * This corresponds to append positions (text curlies or attribute
  * curlies). In strict mode, this also corresponds to arg curlies.
  */
-export function AttrValueSyntaxContext(
-  node: ASTv1.MustacheStatement
-): ASTv2.FreeVarResolution {
+export function AttrValueSyntaxContext(node: ASTv1.MustacheStatement): ASTv2.FreeVarResolution {
   let isSimple = isSimpleCallee(node);
   let isInvoke = isInvokeNode(node);
 
@@ -73,9 +58,7 @@ export function AttrValueSyntaxContext(
       ? ASTv2.LooseModeResolution.namespaced(ASTv2.FreeVarNamespace.Helper)
       : ASTv2.LooseModeResolution.attr();
   } else {
-    return isInvoke
-      ? ASTv2.STRICT_RESOLUTION
-      : ASTv2.LooseModeResolution.fallback();
+    return isInvoke ? ASTv2.STRICT_RESOLUTION : ASTv2.LooseModeResolution.fallback();
   }
 }
 
@@ -83,9 +66,7 @@ export function AttrValueSyntaxContext(
  * This corresponds to append positions (text curlies or attribute
  * curlies). In strict mode, this also corresponds to arg curlies.
  */
-export function AppendSyntaxContext(
-  node: ASTv1.MustacheStatement
-): ASTv2.FreeVarResolution {
+export function AppendSyntaxContext(node: ASTv1.MustacheStatement): ASTv2.FreeVarResolution {
   let isSimple = isSimpleCallee(node);
   let isInvoke = isInvokeNode(node);
   let trusting = node.trusting;
@@ -137,7 +118,7 @@ function isSimpleCallee(node: AstCallParts): boolean {
 }
 
 function isSimplePath(node: ASTv1.Expression): boolean {
-  if (node.type === "PathExpression" && node.head.type === "VarHead") {
+  if (node.type === 'PathExpression' && node.head.type === 'VarHead') {
     return node.tail.length === 0;
   } else {
     return false;

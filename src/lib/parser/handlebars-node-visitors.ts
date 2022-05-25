@@ -45,6 +45,52 @@ export class HandlebarsNodeVisitors implements HandlebarsCallbacks {
     return result as HBS.NodeMap[K]['output'];
   }
 
+  Template(program: HBS.Program): ASTv1.Template {
+    let body: ASTv1.Statement[] = [];
+
+    this.#parser.pushScope(program.blockParams ?? []);
+
+    let node = this.#b.template({
+      body,
+      blockParams: program.blockParams,
+      loc: this.#b.span(program.loc),
+    });
+
+    const children = program.body;
+
+    this.#parser.pushParent(node);
+
+    if (children.length === 0) {
+      return this.#parser.popParent() as ASTv1.Template;
+    }
+
+    for (const child of children) {
+      this.#parser.accept(child);
+    }
+
+    // Ensure that that the element stack is balanced properly.
+    const parent = this.#parser.popParent();
+
+    if (parent !== node) {
+      assert(
+        parent.type === 'ElementNode',
+        `The only possible kind of unclosed parent is ElementNode, but somehow got ${parent.type}`
+      );
+      this.#parser.reportError(
+        SymbolicSyntaxError.of('elements.unclosed-element', parent.tag).spanned(
+          parent.loc.sliceStartChars({
+            skipStart: 1,
+            chars: parent.tag.length,
+          })
+        )
+      );
+    }
+
+    this.#parser.popScope();
+
+    return node;
+  }
+
   Program(program: HBS.Program): ASTv1.Block;
   Program(program: HBS.Program): ASTv1.Template;
   Program(program: HBS.Program): ASTv1.Template | ASTv1.Block;

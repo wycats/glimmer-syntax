@@ -26,14 +26,6 @@ export interface ASTPluginEnvironment {
   syntax: Syntax;
 }
 
-// export interface Syntax {
-//   parse: typeof preprocess;
-//   builders: typeof publicBuilder;
-//   print: typeof print;
-//   traverse: typeof traverse;
-//   Walker: typeof Walker;
-// }
-
 export class Syntax {
   static create(template: SourceTemplate): Syntax {
     return new Syntax(template);

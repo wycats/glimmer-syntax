@@ -35,34 +35,34 @@ export class TokenizerEventHandlers implements TokenizerDelegate {
 
   beginComment(): void {
     this.#parser.traced('beginComment:trace');
-    this.#parser.constructing(this.#b.comment('', this.#parser.offset().move(-4)));
+    this.#parser.comment.start();
   }
 
   appendToCommentData(char: string): void {
     this.#parser.traced('appendToCommentData:trace', char);
-    this.#parser.modify('CommentStatement', (comment) => (comment.value += char));
+    this.#parser.addChar(char);
   }
 
   finishComment(): void {
     this.#parser.traced('finishComment:trace');
-    this.#parser.appendLeaf('CommentStatement');
+    this.#parser.comment.finish();
   }
 
   // Data
 
   beginData(): void {
     this.#parser.traced('beginData:trace');
-    this.#parser.constructing(this.#b.text({ chars: '', loc: this.#parser.offset().collapsed() }));
+    this.#parser.text.start();
   }
 
   appendToData(char: string): void {
     this.#parser.traced('appendToData:trace', char);
-    this.#parser.modify('TextNode', (text) => (text.chars += char));
+    this.#parser.addChar(char);
   }
 
   finishData(): void {
     this.#parser.traced('finishData:trace');
-    this.#parser.appendLeaf('TextNode');
+    this.#parser.text.finish();
   }
 
   // Tags - basic
